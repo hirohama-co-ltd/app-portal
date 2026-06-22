@@ -150,3 +150,77 @@ function rejectClaimFromPortal_(app, claimId, reason) {
     return { success: false, message: e.message || String(e) };
   }
 }
+
+function approvePurchaseFromPortal_(app, purchaseRequestId, comment) {
+  var userEmail = getCurrentUserEmail_();
+  var purchase = getPurchaseFromApp_(app, purchaseRequestId);
+  if (!purchase) return { success: false, message: '申請が見つかりません。' };
+  if (purchase.status !== PURCHASE_STATUS.SUBMITTED) {
+    return { success: false, message: '申請中のデータのみ承認できます。' };
+  }
+  if (purchase.approverEmail !== userEmail) {
+    return { success: false, message: '承認権限がありません。' };
+  }
+
+  try {
+    var nextStep = getNextWorkflowStep_(purchase.routeId, purchase.applicantEmail, purchase.currentStep);
+    if (nextStep) {
+      purchase.currentStep = nextStep.stepNo;
+      purchase.currentStepName = nextStep.stepName;
+      purchase.approverEmail = nextStep.approverEmail;
+      purchase.updatedAt = formatDateTime(new Date());
+      writePurchaseRowToApp_(app, purchase);
+      appendPurchaseHistory_(app, purchaseRequestId, '承認（' + (purchase.currentStep - 1) + '/' + purchase.totalSteps + '）', comment);
+      return { success: true, message: '承認しました。次の承認者（' + nextStep.stepName + '）に回りました。' };
+    }
+
+    purchase.status = PURCHASE_STATUS.APPROVED;
+    purchase.approvedAt = formatDateTime(new Date());
+    purchase.rejectReason = '';
+    purchase.updatedAt = purchase.approvedAt;
+    writePurchaseRowToApp_(app, purchase);
+    appendPurchaseHistory_(app, purchaseRequestId, '承認', comment);
+    return { success: true, message: '承認しました。' };
+  } catch (e) {
+    return { success: false, message: e.message || String(e) };
+  }
+}
+
+function rejectPurchaseFromPortal_(app, purchaseRequestId, reason, rejectTargetChoice) {
+  var userEmail = getCurrentUserEmail_();
+  var purchase = getPurchaseFromApp_(app, purchaseRequestId);
+  if (!purchase) return { success: false, message: '申請が見つかりません。' };
+  if (purchase.status !== PURCHASE_STATUS.SUBMITTED) {
+    return { success: false, message: '申請中のデータのみ差戻しできます。' };
+  }
+  if (purchase.approverEmail !== userEmail) {
+    return { success: false, message: '承認権限がありません。' };
+  }
+
+  try {
+    purchase = enrichTripWithWorkflowStep_(purchase);
+    var route = resolveRejectRoute_(purchase, rejectTargetChoice);
+    if (route.mode === 'previous_step') {
+      purchase.currentStep = route.stepNo;
+      purchase.currentStepName = route.stepName;
+      purchase.approverEmail = route.approverEmail;
+      purchase.rejectReason = reason;
+      purchase.updatedAt = formatDateTime(new Date());
+      writePurchaseRowToApp_(app, purchase);
+      appendPurchaseHistory_(app, purchaseRequestId, '差戻し（前ステップへ）', reason);
+      return { success: true, message: '差戻しました。前の承認者（' + route.stepName + '）に戻しました。' };
+    }
+
+    purchase.status = PURCHASE_STATUS.REJECTED;
+    purchase.rejectReason = reason;
+    purchase.approvedAt = '';
+    purchase.currentStep = 0;
+    purchase.currentStepName = '';
+    purchase.updatedAt = formatDateTime(new Date());
+    writePurchaseRowToApp_(app, purchase);
+    appendPurchaseHistory_(app, purchaseRequestId, '差戻し', reason);
+    return { success: true, message: '差戻しました。' };
+  } catch (e) {
+    return { success: false, message: e.message || String(e) };
+  }
+}

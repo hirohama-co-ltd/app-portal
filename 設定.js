@@ -30,6 +30,16 @@ var CLAIM_STATUS = {
   SETTLED: '精算完了'
 };
 
+/** 購買申請ステータス */
+var PURCHASE_STATUS = {
+  DRAFT: '下書き',
+  SUBMITTED: '申請中',
+  APPROVED: '承認済',
+  REJECTED: '差戻し',
+  WITHDRAWN: '取り下げ',
+  CANCELLED: '取消'
+};
+
 /**
  * 業務アプリ登録はワークフロー設定ブックの「ポータルアプリ登録」シートで管理。
  * Web UI「ポータル連携」タブから随時追加可能（申請ポータルのコード変更不要）。

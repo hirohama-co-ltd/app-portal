@@ -35,6 +35,7 @@
     .app-tag { display: inline-block; font-size: 10px; font-weight: bold; padding: 2px 8px; border-radius: 4px; margin-right: 6px; }
     .app-tag-trip { background: #ccfbf1; color: #0f766e; }
     .app-tag-claim { background: #dbeafe; color: #1d4ed8; }
+    .app-tag-purchase { background: #fef3c7; color: #92400e; }
     .item-title { font-weight: bold; font-size: 14px; }
     .item-meta { font-size: 12px; color: #64748b; margin-top: 4px; }
     .status-badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
@@ -118,7 +119,7 @@
 </div>
 
 <div id="panel-approval" class="panel">
-  <p class="hint">出張申請・旅費精算など、すべての業務アプリの承認待ちをまとめて表示します。</p>
+  <p class="hint">承認待ちと、管理者向けの未登録マスタ対応通知をまとめて表示します。</p>
   <div class="filter-row" style="margin-bottom:12px">
     <button class="btn btn-secondary btn-sm" onclick="refresh(true)">更新</button>
   </div>
@@ -254,21 +255,29 @@
   }
 
   function itemCardInner(item) {
-    var tagClass = item.dataType === 'trip' ? 'app-tag-trip' : 'app-tag-claim';
+    var tagClass = item.dataType === 'trip' ? 'app-tag-trip' : item.dataType === 'purchase' ? 'app-tag-purchase' : 'app-tag-claim';
     var progress = item.totalSteps > 1 && item.status === '申請中'
       ? ' / 承認' + item.currentStep + '/' + item.totalSteps : '';
     var amountStr = item.amount ? ' / ' + Number(item.amount).toLocaleString() + '円' : '';
+    var masterBadge = item.masterStatus === 'マスタ未登録あり'
+      ? '<span class="extra-badge">マスタ未登録あり' + (item.unregisteredMasterCount ? ' ' + item.unregisteredMasterCount + '件' : '') + '</span>' : '';
     var extra = item.extraStatus && item.dataType === 'trip'
       ? '<span class="extra-badge">' + esc(item.extraStatus) + '</span>' : '';
     if (item.extraStatus && item.dataType === 'claim' && item.extraStatus.indexOf('出張:') === 0) {
       extra = '<span class="extra-badge">' + esc(item.extraStatus.replace('出張:', '')) + '</span>';
     }
+    if (item.extraStatus && item.dataType === 'purchase') {
+      extra = '<span class="extra-badge">' + esc(item.extraStatus) + '</span>';
+    }
+    var period = item.dataType === 'purchase'
+      ? '希望納期 ' + esc(item.tripStart || '-')
+      : esc(item.tripStart) + '〜' + esc(item.tripEnd);
     return '<div class="item-card-header">' +
       '<div><span class="app-tag ' + tagClass + '">' + esc(item.appName) + '</span>' +
       '<span class="item-title">' + esc(item.title || '（無題）') + '</span></div>' +
       '<span class="status-badge status-' + esc(item.status) + '">' + esc(item.status) + '</span></div>' +
-      '<div class="item-meta">' + esc(item.requestId) + ' / ' + esc(item.tripStart) + '〜' + esc(item.tripEnd) +
-      progress + amountStr + extra + '</div>';
+      '<div class="item-meta">' + esc(item.requestId) + ' / ' + period +
+      progress + amountStr + extra + masterBadge + '</div>';
   }
 
   function renderPending(items) {
@@ -328,8 +337,8 @@
     var html = '<table>';
     html += row('種別', res.appName);
     html += row('ステータス', item.status);
-    html += row('期間', item.tripStart + (d.directDepart ? '（直行）' : '') + ' 〜 ' + item.tripEnd + (d.directReturn ? '（直帰）' : ''));
-    html += row('出張先', item.title);
+    html += row(res.dataType === 'purchase' ? '希望納期' : '期間', res.dataType === 'purchase' ? item.tripStart : item.tripStart + (d.directDepart ? '（直行）' : '') + ' 〜 ' + item.tripEnd + (d.directReturn ? '（直帰）' : ''));
+    html += row(res.dataType === 'purchase' ? '品名' : '出張先', item.title);
     html += row('目的', item.subtitle);
     html += row('申請者', (d.applicantName || '') + ' (' + (d.applicantEmail || '') + ')');
 
@@ -343,6 +352,24 @@
         html += row('承認進捗', (d.currentStepName || '') + ' ' + d.currentStep + '/' + d.totalSteps);
       }
       if (d.note) html += row('備考', d.note);
+    } else if (res.dataType === 'purchase') {
+      html += row('購入先', d.supplier || '-');
+      html += row('マスタ登録状態', d.masterStatus || item.masterStatus || '登録済');
+      html += row('合計', Number(d.totalAmount || 0).toLocaleString() + ' 円');
+      html += row('予算区分', d.budgetCategory || '-');
+      html += row('支払方法', d.paymentMethod || '-');
+      if (d.totalSteps > 1) {
+        html += row('承認進捗', (d.currentStepName || '') + ' ' + d.currentStep + '/' + d.totalSteps);
+      }
+      if (d.note) html += row('備考', d.note);
+      if (d.details && d.details.length) {
+        html += '</table><div class="section-title" style="margin-top:12px">購買明細</div><table>';
+        html += '<tr><th>メーカー</th><th>品番</th><th>品名</th><th>数量</th><th>金額</th></tr>';
+        d.details.forEach(function(line) {
+          html += '<tr><td>' + esc(line.maker || '-') + '</td><td>' + esc(line.modelNumber || '-') + '</td><td>' + esc(line.itemName || '-') +
+            '</td><td>' + Number(line.quantity || 0).toLocaleString() + '</td><td>' + Number(line.amount || 0).toLocaleString() + '</td></tr>';
+        });
+      }
     } else {
       html += row('合計', ((d.totalAmount || 0) + (d.perDiemTotal || 0)).toLocaleString() + ' 円');
       if (d.tripRequestId) html += row('出張申請ID', d.tripRequestId);
@@ -361,7 +388,7 @@
 
     document.getElementById('modalBody').innerHTML = html;
 
-    if (res.dataType === 'trip' && d.routeId && appData.workflowLinked) {
+    if ((res.dataType === 'trip' || res.dataType === 'purchase') && d.routeId && appData.workflowLinked) {
       document.getElementById('modalRoutePreviewWrap').style.display = 'block';
       google.script.run.withSuccessHandler(function(preview) {
         var el = document.getElementById('modalRoutePreview');
@@ -379,6 +406,9 @@
       actions.innerHTML = '<button class="btn btn-success" style="flex:1" onclick="doApprove()">承認</button>' +
         '<button class="btn btn-danger" style="flex:1" onclick="doReject()">差戻し</button>';
     }
+    if (res.dataType === 'purchase' && item.masterStatus === 'マスタ未登録あり' && res.webAppUrl) {
+      actions.innerHTML += '<button class="btn btn-success" style="flex:1" onclick="openMasterAdminApp()">未登録マスタ管理を開く</button>';
+    }
     if (res.webAppUrl) {
       actions.innerHTML += '<button class="btn btn-outline" style="flex:1" onclick="openSourceApp()">各アプリで開く</button>';
     }
@@ -394,6 +424,16 @@
     var url = currentDetail.webAppUrl;
     var id = currentDetail.item && currentDetail.item.requestId;
     if (id) url += (url.indexOf('?') === -1 ? '?' : '&') + 'requestId=' + encodeURIComponent(id);
+    window.top.location.href = url;
+  }
+
+  function openMasterAdminApp() {
+    if (!currentDetail || !currentDetail.webAppUrl) return;
+    var url = currentDetail.webAppUrl;
+    var sep = url.indexOf('?') === -1 ? '?' : '&';
+    url += sep + 'admin=masters';
+    var id = currentDetail.item && currentDetail.item.requestId;
+    if (id) url += '&requestId=' + encodeURIComponent(id);
     window.top.location.href = url;
   }
 

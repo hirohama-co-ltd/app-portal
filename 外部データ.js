@@ -23,6 +23,18 @@ var CLAIM_HEADERS = [
 var CLAIM_DETAIL_HEADERS = ['精算ID', '行No', '日付', '経費区分', '内容', '金額', '領収書URL', '備考'];
 var CLAIM_HISTORY_HEADERS = ['精算ID', '操作日時', '操作者Email', '操作', 'コメント'];
 
+var PURCHASE_SHEET = '購買申請一覧';
+var PURCHASE_HISTORY_SHEET = '承認履歴';
+var PURCHASE_HEADERS = [
+  '購買申請ID', '申請日', '申請者Email', '申請者名', '希望納期',
+  '購入先', '品名', '数量', '単価', '合計金額', '購買目的', '予算区分', '支払方法', '備考',
+  'マスタ登録状態', '未登録マスタ件数', 'ステータス', '承認者Email', '承認日時', '差戻し理由', '更新日時',
+  '経路ID', '現在ステップ', '総ステップ数', '現在ステップ名'
+];
+var PURCHASE_HISTORY_HEADERS = ['購買申請ID', '操作日時', '操作者Email', '操作', 'コメント'];
+var PURCHASE_DETAIL_SHEET = '購買明細';
+var PURCHASE_DETAIL_HEADERS = ['購買申請ID', '行No', 'メーカー', '品番', '品名', '数量', '単価', '金額', '備考'];
+
 function openAppSpreadsheet_(app) {
   if (!app || !String(app.ssId || '').trim()) return null;
   try {
@@ -290,4 +302,146 @@ function getClaimWithDetailsFromApp_(app, claimId) {
   if (!claim) return null;
   claim.details = readClaimDetailsFromApp_(app, claimId);
   return claim;
+}
+
+function mapHeaderColumns_(headers) {
+  var map = {};
+  for (var i = 0; i < headers.length; i++) {
+    var key = String(headers[i] || '').trim();
+    if (key) map[key] = i;
+  }
+  return map;
+}
+
+function portalCell_(data, colMap, header, fallback) {
+  var idx = colMap && colMap.hasOwnProperty(header) ? colMap[header] : -1;
+  return idx >= 0 ? data[idx] : fallback;
+}
+
+function mapPurchaseRow_(data, colMap) {
+  return {
+    purchaseRequestId: String(portalCell_(data, colMap, '購買申請ID', data[0]) || '').trim(),
+    requestDate: normalizeDate(portalCell_(data, colMap, '申請日', data[1])),
+    applicantEmail: String(portalCell_(data, colMap, '申請者Email', data[2]) || '').trim().toLowerCase(),
+    applicantName: String(portalCell_(data, colMap, '申請者名', data[3]) || ''),
+    desiredDate: normalizeDate(portalCell_(data, colMap, '希望納期', data[4])),
+    supplier: String(portalCell_(data, colMap, '購入先', data[5]) || ''),
+    itemName: String(portalCell_(data, colMap, '品名', data[6]) || ''),
+    quantity: normalizeAmount(portalCell_(data, colMap, '数量', data[7])),
+    unitPrice: normalizeAmount(portalCell_(data, colMap, '単価', data[8])),
+    totalAmount: normalizeAmount(portalCell_(data, colMap, '合計金額', data[9])),
+    purpose: String(portalCell_(data, colMap, '購買目的', data[10]) || ''),
+    budgetCategory: String(portalCell_(data, colMap, '予算区分', data[11]) || ''),
+    paymentMethod: String(portalCell_(data, colMap, '支払方法', data[12]) || ''),
+    note: String(portalCell_(data, colMap, '備考', data[13]) || ''),
+    masterStatus: String(portalCell_(data, colMap, 'マスタ登録状態', '登録済') || '登録済'),
+    unregisteredMasterCount: parseInt(portalCell_(data, colMap, '未登録マスタ件数', 0), 10) || 0,
+    status: String(portalCell_(data, colMap, 'ステータス', data[14]) || PURCHASE_STATUS.DRAFT),
+    approverEmail: String(portalCell_(data, colMap, '承認者Email', data[15]) || '').trim().toLowerCase(),
+    approvedAt: formatDateTime(portalCell_(data, colMap, '承認日時', data[16])),
+    rejectReason: String(portalCell_(data, colMap, '差戻し理由', data[17]) || ''),
+    updatedAt: formatDateTime(portalCell_(data, colMap, '更新日時', data[18])),
+    routeId: String(portalCell_(data, colMap, '経路ID', data[19]) || '').trim(),
+    currentStep: parseInt(portalCell_(data, colMap, '現在ステップ', data[20]), 10) || 0,
+    totalSteps: parseInt(portalCell_(data, colMap, '総ステップ数', data[21]), 10) || 0,
+    currentStepName: String(portalCell_(data, colMap, '現在ステップ名', data[22]) || '').trim()
+  };
+}
+
+function purchaseRowToValues_(r) {
+  return [
+    r.purchaseRequestId, r.requestDate, r.applicantEmail, r.applicantName, r.desiredDate,
+    r.supplier, r.itemName, r.quantity, r.unitPrice, r.totalAmount, r.purpose,
+    r.budgetCategory, r.paymentMethod, r.note, r.masterStatus || '登録済',
+    r.unregisteredMasterCount || 0, r.status, r.approverEmail, r.approvedAt,
+    r.rejectReason, r.updatedAt, r.routeId || '', r.currentStep || 0, r.totalSteps || 0, r.currentStepName || ''
+  ];
+}
+
+function readPurchaseRowsFromApp_(app, filterFn) {
+  var ss = openAppSpreadsheet_(app);
+  if (!ss) return [];
+  var sheet = ss.getSheetByName(PURCHASE_SHEET);
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  var colCount = Math.max(PURCHASE_HEADERS.length, sheet.getLastColumn());
+  var colMap = mapHeaderColumns_(sheet.getRange(1, 1, 1, colCount).getValues()[0]);
+  var data = sheet.getRange(2, 1, sheet.getLastRow(), colCount).getValues();
+  var rows = [];
+  for (var i = 0; i < data.length; i++) {
+    if (!data[i][0]) continue;
+    var row = mapPurchaseRow_(data[i], colMap);
+    if (!filterFn || filterFn(row)) rows.push(row);
+  }
+  return rows;
+}
+
+function writePurchaseRowToApp_(app, purchase) {
+  var ss = openAppSpreadsheet_(app);
+  if (!ss) throw new Error('購買申請ブックを開けません。ssId と権限を確認してください。');
+  var sheet = ss.getSheetByName(PURCHASE_SHEET);
+  if (!sheet) throw new Error('「' + PURCHASE_SHEET + '」シートがありません。');
+  ensureHeaders_(sheet, PURCHASE_HEADERS);
+
+  var all = readPurchaseRowsFromApp_(app);
+  var idx = -1;
+  for (var i = 0; i < all.length; i++) {
+    if (all[i].purchaseRequestId === purchase.purchaseRequestId) { idx = i; break; }
+  }
+  if (idx >= 0) all[idx] = purchase;
+  else all.push(purchase);
+
+  sheet.getRange(1, 1, 1, PURCHASE_HEADERS.length).setValues([PURCHASE_HEADERS]);
+  if (all.length === 0) {
+    if (sheet.getLastRow() > 1) sheet.deleteRows(2, sheet.getLastRow() - 1);
+    return;
+  }
+  var values = all.map(purchaseRowToValues_);
+  if (sheet.getLastRow() > 1) sheet.deleteRows(2, sheet.getLastRow() - 1);
+  sheet.getRange(2, 1, values.length, PURCHASE_HEADERS.length).setValues(values);
+}
+
+function appendPurchaseHistory_(app, purchaseRequestId, action, comment) {
+  var ss = openAppSpreadsheet_(app);
+  if (!ss) return;
+  var sheet = ss.getSheetByName(PURCHASE_HISTORY_SHEET) || ss.insertSheet(PURCHASE_HISTORY_SHEET);
+  ensureHeaders_(sheet, PURCHASE_HISTORY_HEADERS);
+  sheet.appendRow([purchaseRequestId, formatDateTime(new Date()), getCurrentUserEmail_(), action, comment || '']);
+}
+
+function getPurchaseFromApp_(app, purchaseRequestId) {
+  var id = String(purchaseRequestId || '').trim();
+  var rows = readPurchaseRowsFromApp_(app, function(r) { return r.purchaseRequestId === id; });
+  return rows.length ? rows[0] : null;
+}
+
+function readPurchaseDetailsFromApp_(app, purchaseRequestId) {
+  var ss = openAppSpreadsheet_(app);
+  if (!ss) return [];
+  var sheet = ss.getSheetByName(PURCHASE_DETAIL_SHEET);
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, PURCHASE_DETAIL_HEADERS.length).getValues();
+  var rows = [];
+  for (var i = 0; i < data.length; i++) {
+    if (!data[i][0]) continue;
+    if (purchaseRequestId && String(data[i][0]) !== purchaseRequestId) continue;
+    rows.push({
+      lineNo: parseInt(data[i][1], 10) || (i + 1),
+      maker: String(data[i][2] || ''),
+      modelNumber: String(data[i][3] || ''),
+      itemName: String(data[i][4] || ''),
+      quantity: normalizeAmount(data[i][5]),
+      unitPrice: normalizeAmount(data[i][6]),
+      amount: normalizeAmount(data[i][7]),
+      note: String(data[i][8] || '')
+    });
+  }
+  rows.sort(function(a, b) { return a.lineNo - b.lineNo; });
+  return rows;
+}
+
+function getPurchaseWithDetailsFromApp_(app, purchaseRequestId) {
+  var purchase = getPurchaseFromApp_(app, purchaseRequestId);
+  if (!purchase) return null;
+  purchase.details = readPurchaseDetailsFromApp_(app, purchaseRequestId);
+  return purchase;
 }

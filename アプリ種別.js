@@ -3,7 +3,7 @@
 // 新規アプリ追加時: ここに種別を追加し、外部データ.js に読み書きを実装
 // ========================================
 
-var SUPPORTED_DATA_TYPES = ['trip', 'claim'];
+var SUPPORTED_DATA_TYPES = ['trip', 'claim', 'purchase'];
 
 function isSupportedDataType_(dataType) {
   return SUPPORTED_DATA_TYPES.indexOf(String(dataType || '').trim().toLowerCase()) >= 0;
@@ -16,6 +16,9 @@ function isPendingRecord_(record, dataType, userEmail) {
   }
   if (dataType === 'claim') {
     return record.status === CLAIM_STATUS.SUBMITTED && record.approverEmail === userEmail;
+  }
+  if (dataType === 'purchase') {
+    return record.status === PURCHASE_STATUS.SUBMITTED && record.approverEmail === userEmail;
   }
   return false;
 }
@@ -30,6 +33,10 @@ function collectItemsFromApp_(app, filterFn) {
   } else if (dataType === 'claim') {
     readClaimRowsFromApp_(app, filterFn).forEach(function(c) {
       items.push(claimToPortalItem_(c, app));
+    });
+  } else if (dataType === 'purchase') {
+    readPurchaseRowsFromApp_(app, filterFn).forEach(function(p) {
+      items.push(purchaseToPortalItem_(p, app));
     });
   }
   return items;
@@ -70,6 +77,23 @@ function getApplicationDetailByType_(app, requestId, userEmail) {
       webAppUrl: app.webAppUrl || ''
     };
   }
+  if (dataType === 'purchase') {
+    var purchase = getPurchaseWithDetailsFromApp_(app, requestId);
+    if (!purchase) return { success: false, message: '申請が見つかりません。' };
+    if (!canViewApplication_(app, purchase, userEmail)) {
+      return { success: false, message: '閲覧権限がありません。' };
+    }
+    purchase = enrichTripWithWorkflowStep_(purchase);
+    return {
+      success: true,
+      appCode: app.appCode,
+      appName: app.appName,
+      dataType: 'purchase',
+      item: purchaseToPortalItem_(purchase, app),
+      detail: purchase,
+      webAppUrl: app.webAppUrl || ''
+    };
+  }
   return { success: false, message: '未対応のデータ種別です（' + dataType + '）' };
 }
 
@@ -77,6 +101,7 @@ function approveApplicationByType_(app, requestId, comment) {
   var dataType = String(app.dataType || '').trim().toLowerCase();
   if (dataType === 'trip') return approveTripFromPortal_(app, requestId, comment);
   if (dataType === 'claim') return approveClaimFromPortal_(app, requestId, comment);
+  if (dataType === 'purchase') return approvePurchaseFromPortal_(app, requestId, comment);
   return { success: false, message: '未対応のデータ種別です。' };
 }
 
@@ -84,5 +109,6 @@ function rejectApplicationByType_(app, requestId, reason, rejectTargetChoice) {
   var dataType = String(app.dataType || '').trim().toLowerCase();
   if (dataType === 'trip') return rejectTripFromPortal_(app, requestId, reason, rejectTargetChoice);
   if (dataType === 'claim') return rejectClaimFromPortal_(app, requestId, reason);
+  if (dataType === 'purchase') return rejectPurchaseFromPortal_(app, requestId, reason, rejectTargetChoice);
   return { success: false, message: '未対応のデータ種別です。' };
 }

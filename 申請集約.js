@@ -54,42 +54,49 @@ function claimToPortalItem_(claim, app) {
   };
 }
 
-function listMyApplications() {
-  var userEmail = getCurrentUserEmail_();
-  if (!userEmail) return [];
-
-  var items = [];
-  getActivePortalApps_().forEach(function(app) {
-    items = items.concat(collectItemsFromApp_(app, function(r) {
-      return r.applicantEmail === userEmail;
-    }));
-  });
-
-  items.sort(function(a, b) {
-    return (b.updatedAt || b.requestDate || '').localeCompare(a.updatedAt || a.requestDate || '');
-  });
-  return items;
+function purchaseToPortalItem_(purchase, app) {
+  return {
+    appCode: app.appCode,
+    appName: app.appName,
+    dataType: 'purchase',
+    requestId: purchase.purchaseRequestId,
+    requestDate: purchase.requestDate,
+    applicantEmail: purchase.applicantEmail,
+    applicantName: purchase.applicantName,
+    title: purchase.itemName,
+    subtitle: purchase.purpose,
+    status: purchase.status,
+    extraStatus: purchase.supplier || '',
+    masterStatus: purchase.masterStatus || '登録済',
+    unregisteredMasterCount: purchase.unregisteredMasterCount || 0,
+    tripStart: purchase.desiredDate,
+    tripEnd: purchase.desiredDate,
+    amount: purchase.totalAmount,
+    approverEmail: purchase.approverEmail,
+    routeId: purchase.routeId,
+    currentStep: purchase.currentStep,
+    totalSteps: purchase.totalSteps,
+    currentStepName: purchase.currentStepName,
+    updatedAt: purchase.updatedAt,
+    webAppUrl: app.webAppUrl || ''
+  };
 }
 
-function listPendingApprovals() {
-  var userEmail = getCurrentUserEmail_();
-  if (!userEmail) return [];
-
-  var items = [];
-  getActivePortalApps_().forEach(function(app) {
-    items = items.concat(collectItemsFromApp_(app, function(r) {
-      return isPendingRecord_(r, app.dataType, userEmail);
-    }));
-  });
-
-  items.sort(function(a, b) {
-    return (a.requestDate || '').localeCompare(b.requestDate || '');
-  });
-  return items;
+function isPurchaseMasterPendingNotice_(item, employee) {
+  return item && item.dataType === 'purchase' &&
+    item.status === PURCHASE_STATUS.APPROVED &&
+    item.masterStatus === 'マスタ未登録あり' &&
+    employeeHasRole_(employee, 'ワークフロー管理者');
 }
 
 function canViewApplication_(app, record, userEmail) {
   if (!record || !userEmail) return false;
+  if (String(app.dataType || '').trim().toLowerCase() === 'purchase' &&
+      record.status === PURCHASE_STATUS.APPROVED &&
+      record.masterStatus === 'マスタ未登録あり' &&
+      employeeHasRole_(findEmployeeByEmail(userEmail), 'ワークフロー管理者')) {
+    return true;
+  }
   return record.applicantEmail === userEmail || record.approverEmail === userEmail;
 }
 
@@ -107,14 +114,36 @@ function getApplicationDetail(appCode, requestId) {
 function getPortalInitialData() {
   var userEmail = getCurrentUserEmail_();
   var employee = findEmployeeByEmail(userEmail);
-  var pending = listPendingApprovals();
+
+  var myApplications = [];
+  var pendingApprovals = [];
+
+  if (userEmail) {
+    // 各業務アプリのブックは1回だけ開いて全行を読み、
+    // 「自分の申請」と「承認待ち」をメモリ上で振り分ける（openById の重複回避）。
+    getActivePortalApps_().forEach(function(app) {
+      collectItemsFromApp_(app, null).forEach(function(item) {
+        if (item.applicantEmail === userEmail) myApplications.push(item);
+        if (isPendingRecord_(item, item.dataType, userEmail) || isPurchaseMasterPendingNotice_(item, employee)) {
+          pendingApprovals.push(item);
+        }
+      });
+    });
+
+    myApplications.sort(function(a, b) {
+      return (b.updatedAt || b.requestDate || '').localeCompare(a.updatedAt || a.requestDate || '');
+    });
+    pendingApprovals.sort(function(a, b) {
+      return (a.requestDate || '').localeCompare(b.requestDate || '');
+    });
+  }
 
   return {
     userEmail: userEmail,
     employee: employee,
     launchers: getPortalLaunchers_(),
-    myApplications: listMyApplications(),
-    pendingApprovals: pending,
+    myApplications: myApplications,
+    pendingApprovals: pendingApprovals,
     configWarnings: getPortalConfigWarnings_(),
     workflowLinked: isWorkflowLinked_()
   };

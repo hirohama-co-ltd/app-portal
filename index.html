@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', sans-serif; background: #f1f5f9; margin: 0; padding: 10px; color: #1e293b; }
+    .header { background: #5b21b6; color: #fff; padding: 12px 16px; border-radius: 8px 8px 0 0; }
+    .header h1 { margin: 0 0 4px 0; font-size: 1.15rem; }
+    .header .user-info { font-size: 12px; opacity: 0.9; }
+    .tabs { display: flex; background: #7c3aed; padding: 4px; gap: 4px; border-radius: 0 0 8px 8px; margin-bottom: 12px; overflow-x: auto; }
+    .tab-btn { flex: 1; min-width: 90px; border: none; background: transparent; color: #ddd6fe; padding: 10px 8px; font-size: 13px; font-weight: bold; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+    .tab-btn.active { background: #fff; color: #5b21b6; }
+    .panel { display: none; background: #fff; border-radius: 8px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .panel.active { display: block; }
+    .section-title { font-size: 14px; font-weight: bold; color: #5b21b6; border-left: 4px solid #7c3aed; padding-left: 8px; margin: 16px 0 10px 0; }
+    .section-title:first-child { margin-top: 0; }
+    .hint { font-size: 12px; color: #64748b; margin-bottom: 10px; }
+    .warn-box { font-size: 12px; color: #92400e; background: #fffbeb; border: 1px solid #fcd34d; border-radius: 6px; padding: 10px 12px; margin-bottom: 12px; white-space: pre-wrap; }
+    .launcher-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+    .launcher-card { border: 2px solid #e9d5ff; border-radius: 10px; padding: 16px 12px; text-align: center; cursor: pointer; transition: all 0.15s; background: #faf5ff; }
+    .launcher-card:hover { border-color: #7c3aed; background: #f3e8ff; transform: translateY(-1px); }
+    .launcher-card.disabled { opacity: 0.55; cursor: not-allowed; border-color: #e2e8f0; background: #f8fafc; }
+    .launcher-icon { font-size: 28px; margin-bottom: 6px; }
+    .launcher-name { font-size: 13px; font-weight: bold; color: #5b21b6; }
+    .launcher-note { font-size: 10px; color: #94a3b8; margin-top: 4px; }
+    .filter-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+    .filter-row select { padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; }
+    .item-list { display: flex; flex-direction: column; gap: 8px; }
+    .item-card { border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; cursor: pointer; transition: background 0.15s; }
+    .item-card:hover { background: #faf5ff; }
+    .item-card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
+    .app-tag { display: inline-block; font-size: 10px; font-weight: bold; padding: 2px 8px; border-radius: 4px; margin-right: 6px; }
+    .app-tag-trip { background: #ccfbf1; color: #0f766e; }
+    .app-tag-claim { background: #dbeafe; color: #1d4ed8; }
+    .item-title { font-weight: bold; font-size: 14px; }
+    .item-meta { font-size: 12px; color: #64748b; margin-top: 4px; }
+    .status-badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+    .status-下書き { background: #e2e8f0; color: #475569; }
+    .status-申請中 { background: #dbeafe; color: #1d4ed8; }
+    .status-承認済 { background: #d1fae5; color: #065f46; }
+    .status-差戻し { background: #fee2e2; color: #991b1b; }
+    .status-取消 { background: #f1f5f9; color: #64748b; }
+    .status-精算完了 { background: #ede9fe; color: #5b21b6; }
+    .extra-badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; background: #fef3c7; color: #92400e; margin-left: 4px; }
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+    .btn { border: none; padding: 12px 16px; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; }
+    .btn-primary { background: #5b21b6; color: #fff; flex: 1; }
+    .btn-secondary { background: #64748b; color: #fff; }
+    .btn-success { background: #059669; color: #fff; }
+    .btn-danger { background: #dc2626; color: #fff; }
+    .btn-outline { background: #fff; color: #5b21b6; border: 2px solid #7c3aed; }
+    .btn-sm { padding: 6px 10px; font-size: 12px; }
+    .empty-msg { text-align: center; color: #94a3b8; padding: 24px; font-size: 14px; }
+    .loading { position: fixed; inset: 0; background: rgba(255,255,255,0.85); display: flex; align-items: center; justify-content: center; font-weight: bold; color: #5b21b6; z-index: 100; }
+    .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1e293b; color: #fff; padding: 12px 20px; border-radius: 8px; z-index: 200; display: none; max-width: 90%; font-size: 14px; }
+    .toast.error { background: #dc2626; }
+    .toast.success { background: #059669; }
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 150; align-items: center; justify-content: center; padding: 16px; }
+    .modal-overlay.show { display: flex; }
+    .modal { background: #fff; border-radius: 8px; padding: 20px; width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto; }
+    .modal h3 { margin: 0 0 12px 0; font-size: 16px; }
+    .detail-view { font-size: 13px; line-height: 1.7; }
+    .detail-view table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
+    .detail-view th, .detail-view td { border: 1px solid #e2e8f0; padding: 6px 8px; text-align: left; }
+    .detail-view th { background: #f8fafc; width: 35%; }
+    .badge-count { background: #ef4444; color: #fff; font-size: 10px; padding: 2px 6px; border-radius: 10px; margin-left: 4px; }
+    .route-preview { background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 8px; padding: 12px; margin-top: 10px; font-size: 13px; }
+    .route-step { display: flex; gap: 10px; padding: 6px 0; border-bottom: 1px dashed #e9d5ff; }
+    .route-step:last-child { border-bottom: none; }
+    .route-step-no { flex-shrink: 0; width: 22px; height: 22px; background: #7c3aed; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+<div id="loading" class="loading">読み込み中...</div>
+<div id="toast" class="toast"></div>
+
+<div class="header">
+  <h1>申請ポータル</h1>
+  <div class="user-info" id="userInfo">-</div>
+</div>
+
+<div class="tabs">
+  <button class="tab-btn active" data-tab="new">新規申請</button>
+  <button class="tab-btn" data-tab="list">申請一覧</button>
+  <button class="tab-btn" data-tab="approval" id="tabApproval">承認待ち<span class="badge-count" id="pendingCount" style="display:none">0</span></button>
+</div>
+
+<div id="panel-new" class="panel active">
+  <p class="hint">申請種別を選んで各業務アプリを開きます。アプリの追加はワークフロー設定の「ポータル連携」で行います。</p>
+  <div id="configWarnings" class="warn-box" style="display:none"></div>
+  <div class="section-title">申請を作成</div>
+  <div id="launcherGrid" class="launcher-grid"></div>
+</div>
+
+<div id="panel-list" class="panel">
+  <div class="filter-row">
+    <label style="font-size:12px;font-weight:bold">種別</label>
+    <select id="filterApp" onchange="renderFilteredList()">
+      <option value="">すべて</option>
+    </select>
+    <label style="font-size:12px;font-weight:bold">ステータス</label>
+    <select id="filterStatus" onchange="renderFilteredList()">
+      <option value="">すべて</option>
+      <option value="下書き">下書き</option>
+      <option value="申請中">申請中</option>
+      <option value="承認済">承認済</option>
+      <option value="差戻し">差戻し</option>
+      <option value="精算完了">精算完了</option>
+      <option value="取消">取消</option>
+    </select>
+    <button class="btn btn-secondary btn-sm" onclick="refresh(true)">更新</button>
+  </div>
+  <div id="myAppList" class="item-list"></div>
+</div>
+
+<div id="panel-approval" class="panel">
+  <p class="hint">出張申請・旅費精算など、すべての業務アプリの承認待ちをまとめて表示します。</p>
+  <div class="filter-row" style="margin-bottom:12px">
+    <button class="btn btn-secondary btn-sm" onclick="refresh(true)">更新</button>
+  </div>
+  <div id="pendingList" class="item-list"></div>
+</div>
+
+<div id="detailModal" class="modal-overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h3 id="modalTitle">詳細</h3>
+    <div id="modalBody" class="detail-view"></div>
+    <div class="btn-row" id="modalActions"></div>
+    <button class="btn btn-secondary" style="width:100%;margin-top:8px" onclick="closeModal()">閉じる</button>
+  </div>
+</div>
+
+<script>
+  var appData = null;
+  var currentDetail = null;
+  var currentMode = 'view';
+
+  document.addEventListener('DOMContentLoaded', function() {
+    google.script.run.withSuccessHandler(onInit).withFailureHandler(onError).getInitialAppData();
+    document.addEventListener('visibilitychange', function() {
+      if (document.visibilityState === 'visible' && appData) refresh(false);
+    });
+  });
+
+  function onInit(data) {
+    appData = data;
+    document.getElementById('loading').style.display = 'none';
+    var emp = data.employee ? data.employee.name + ' / ' : '';
+    document.getElementById('userInfo').textContent = emp + (data.userEmail || '');
+    showConfigWarnings(data.configWarnings);
+    renderLaunchers(data.launchers);
+    populateAppFilter(data.launchers);
+    renderMyList(data.myApplications);
+    renderPending(data.pendingApprovals);
+    updatePendingBadge(data.pendingApprovals.length);
+    bindTabs();
+  }
+
+  function showConfigWarnings(warnings) {
+    var el = document.getElementById('configWarnings');
+    if (!warnings || !warnings.length) { el.style.display = 'none'; return; }
+    el.style.display = 'block';
+    el.textContent = '設定確認:\n' + warnings.join('\n');
+  }
+
+  function renderLaunchers(launchers) {
+    var el = document.getElementById('launcherGrid');
+    if (!launchers || !launchers.length) {
+      el.innerHTML = '<div class="empty-msg">登録された申請アプリがありません</div>';
+      return;
+    }
+    el.innerHTML = launchers.map(function(l) {
+      var icon = l.dataType === 'trip' ? '✈️' : '💴';
+      var disabled = !l.hasUrl;
+      var note = disabled ? 'URL未設定' : 'クリックで開く';
+      return '<div class="launcher-card' + (disabled ? ' disabled' : '') + '" data-url="' + esc(l.webAppUrl) + '" data-name="' + esc(l.appName) + '">' +
+        '<div class="launcher-icon">' + icon + '</div>' +
+        '<div class="launcher-name">' + esc(l.appName) + '</div>' +
+        '<div class="launcher-note">' + note + '</div></div>';
+    }).join('');
+    el.querySelectorAll('.launcher-card:not(.disabled)').forEach(function(card) {
+      card.onclick = function() {
+        var url = card.getAttribute('data-url');
+        if (url) window.top.location.href = url;
+      };
+    });
+  }
+
+  function populateAppFilter(launchers) {
+    var sel = document.getElementById('filterApp');
+    var html = '<option value="">すべて</option>';
+    (launchers || []).forEach(function(l) {
+      html += '<option value="' + esc(l.appCode) + '">' + esc(l.appName) + '</option>';
+    });
+    sel.innerHTML = html;
+  }
+
+  function bindTabs() {
+    document.querySelectorAll('.tab-btn').forEach(function(btn) {
+      btn.onclick = function() {
+        var tab = btn.getAttribute('data-tab');
+        document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+        document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
+        btn.classList.add('active');
+        document.getElementById('panel-' + tab).classList.add('active');
+        if (tab === 'list' || tab === 'approval') refresh(false);
+      };
+    });
+  }
+
+  function itemCard(item) {
+    return '<div class="item-card" data-app="' + esc(item.appCode) + '" data-id="' + esc(item.requestId) + '">' +
+      itemCardInner(item) + '</div>';
+  }
+
+  function bindItemCards(container, mode) {
+    container.querySelectorAll('.item-card').forEach(function(c) {
+      c.onclick = function() {
+        openDetail(c.getAttribute('data-app'), c.getAttribute('data-id'), mode);
+      };
+    });
+  }
+
+  function renderMyList(items) {
+    appData.myApplications = items || [];
+    renderFilteredList();
+  }
+
+  function renderFilteredList() {
+    var el = document.getElementById('myAppList');
+    var appFilter = document.getElementById('filterApp').value;
+    var statusFilter = document.getElementById('filterStatus').value;
+    var items = (appData.myApplications || []).filter(function(it) {
+      if (appFilter && it.appCode !== appFilter) return false;
+      if (statusFilter && it.status !== statusFilter) return false;
+      return true;
+    });
+    if (!items.length) {
+      el.innerHTML = '<div class="empty-msg">該当する申請がありません</div>';
+      return;
+    }
+    el.innerHTML = items.map(itemCard).join('');
+    bindItemCards(el, 'mine');
+  }
+
+  function pendingCard(item) {
+    return '<div class="item-card" data-app="' + esc(item.appCode) + '" data-id="' + esc(item.requestId) + '">' +
+      '<div style="font-size:11px;color:#475569;margin-bottom:4px">申請者: ' + esc(item.applicantName || item.applicantEmail) + '</div>' +
+      itemCardInner(item) + '</div>';
+  }
+
+  function itemCardInner(item) {
+    var tagClass = item.dataType === 'trip' ? 'app-tag-trip' : 'app-tag-claim';
+    var progress = item.totalSteps > 1 && item.status === '申請中'
+      ? ' / 承認' + item.currentStep + '/' + item.totalSteps : '';
+    var amountStr = item.amount ? ' / ' + Number(item.amount).toLocaleString() + '円' : '';
+    var extra = item.extraStatus && item.dataType === 'trip'
+      ? '<span class="extra-badge">' + esc(item.extraStatus) + '</span>' : '';
+    if (item.extraStatus && item.dataType === 'claim' && item.extraStatus.indexOf('出張:') === 0) {
+      extra = '<span class="extra-badge">' + esc(item.extraStatus.replace('出張:', '')) + '</span>';
+    }
+    return '<div class="item-card-header">' +
+      '<div><span class="app-tag ' + tagClass + '">' + esc(item.appName) + '</span>' +
+      '<span class="item-title">' + esc(item.title || '（無題）') + '</span></div>' +
+      '<span class="status-badge status-' + esc(item.status) + '">' + esc(item.status) + '</span></div>' +
+      '<div class="item-meta">' + esc(item.requestId) + ' / ' + esc(item.tripStart) + '〜' + esc(item.tripEnd) +
+      progress + amountStr + extra + '</div>';
+  }
+
+  function renderPending(items) {
+    var el = document.getElementById('pendingList');
+    if (!items || !items.length) {
+      el.innerHTML = '<div class="empty-msg">承認待ちはありません</div>';
+      return;
+    }
+    el.innerHTML = items.map(pendingCard).join('');
+    bindItemCards(el, 'approval');
+  }
+
+  function openDetail(appCode, requestId, mode) {
+    currentMode = mode;
+    showLoading(true);
+    google.script.run.withSuccessHandler(function(res) {
+      showLoading(false);
+      if (!res.success) {
+        toast(res.message, true);
+        if (String(res.message || '').indexOf('見つかりません') !== -1) {
+          removeStaleListItem_(appCode, requestId);
+        }
+        return;
+      }
+      currentDetail = res;
+      showModal(res, mode);
+    }).withFailureHandler(onError).getApplicationDetailApi(appCode, requestId);
+  }
+
+  function removeStaleListItem_(appCode, requestId) {
+    appData.myApplications = (appData.myApplications || []).filter(function(it) {
+      return !(it.appCode === appCode && it.requestId === requestId);
+    });
+    appData.pendingApprovals = (appData.pendingApprovals || []).filter(function(it) {
+      return !(it.appCode === appCode && it.requestId === requestId);
+    });
+    renderMyList(appData.myApplications);
+    renderPending(appData.pendingApprovals);
+    updatePendingBadge(appData.pendingApprovals.length);
+  }
+
+  function renderRoutePreviewHtml(res) {
+    if (!res || !res.success || !res.steps || !res.steps.length) return '';
+    var title = res.routeName ? '<div style="font-size:12px;color:#64748b;margin-bottom:6px">' + esc(res.routeName) + '</div>' : '';
+    return title + res.steps.map(function(s) {
+      return '<div class="route-step"><div class="route-step-no">' + s.stepNo + '</div>' +
+        '<div><div style="font-size:11px;color:#64748b">' + esc(s.approvalRole) + (s.stepName ? ' · ' + esc(s.stepName) : '') + '</div>' +
+        '<div style="font-weight:bold;color:#5b21b6">' + esc(s.approverDisplay) + '</div></div></div>';
+    }).join('');
+  }
+
+  function showModal(res, mode) {
+    var item = res.item;
+    var d = res.detail;
+    document.getElementById('modalTitle').textContent = res.appName + ' / ' + item.requestId;
+
+    var html = '<table>';
+    html += row('種別', res.appName);
+    html += row('ステータス', item.status);
+    html += row('期間', item.tripStart + (d.directDepart ? '（直行）' : '') + ' 〜 ' + item.tripEnd + (d.directReturn ? '（直帰）' : ''));
+    html += row('出張先', item.title);
+    html += row('目的', item.subtitle);
+    html += row('申請者', (d.applicantName || '') + ' (' + (d.applicantEmail || '') + ')');
+
+    if (res.dataType === 'trip') {
+      html += row('交通', d.transport || '-');
+      html += row('宿泊先', d.lodgingDestination || d.lodgingPlan || '-');
+      if (d.lodgingCost) html += row('宿泊代金', d.lodgingCost.toLocaleString() + ' 円');
+      html += row('仮払金', (d.advancePayment || d.estimatedCost || 0).toLocaleString() + ' 円');
+      html += row('精算状況', d.settlementStatus + (d.expenseClaimId ? ' (' + d.expenseClaimId + ')' : ''));
+      if (d.totalSteps > 1) {
+        html += row('承認進捗', (d.currentStepName || '') + ' ' + d.currentStep + '/' + d.totalSteps);
+      }
+      if (d.note) html += row('備考', d.note);
+    } else {
+      html += row('合計', ((d.totalAmount || 0) + (d.perDiemTotal || 0)).toLocaleString() + ' 円');
+      if (d.tripRequestId) html += row('出張申請ID', d.tripRequestId);
+      if (d.note) html += row('備考', d.note);
+      if (d.details && d.details.length) {
+        html += '</table><div class="section-title" style="margin-top:12px">経費明細</div><table>';
+        html += '<tr><th>区分</th><th>内容</th><th>金額</th></tr>';
+        d.details.forEach(function(line) {
+          html += '<tr><td>' + esc(line.category) + '</td><td>' + esc(line.description) + '</td><td>' +
+            Number(line.amount || 0).toLocaleString() + '</td></tr>';
+        });
+      }
+    }
+    html += '</table>';
+    html += '<div id="modalRoutePreviewWrap" style="display:none"><div class="section-title" style="margin-top:12px">承認ルート</div><div id="modalRoutePreview" class="route-preview">確認中...</div></div>';
+
+    document.getElementById('modalBody').innerHTML = html;
+
+    if (res.dataType === 'trip' && d.routeId && appData.workflowLinked) {
+      document.getElementById('modalRoutePreviewWrap').style.display = 'block';
+      google.script.run.withSuccessHandler(function(preview) {
+        var el = document.getElementById('modalRoutePreview');
+        if (!el) return;
+        el.innerHTML = preview.success ? renderRoutePreviewHtml(preview) : esc(preview.message || '取得できません');
+      }).withFailureHandler(function() {
+        var wrap = document.getElementById('modalRoutePreviewWrap');
+        if (wrap) wrap.style.display = 'none';
+      }).previewWorkflowRouteApi(d.routeId, d.applicantEmail);
+    }
+
+    var actions = document.getElementById('modalActions');
+    actions.innerHTML = '';
+    if (mode === 'approval' && item.status === '申請中') {
+      actions.innerHTML = '<button class="btn btn-success" style="flex:1" onclick="doApprove()">承認</button>' +
+        '<button class="btn btn-danger" style="flex:1" onclick="doReject()">差戻し</button>';
+    }
+    if (res.webAppUrl) {
+      actions.innerHTML += '<button class="btn btn-outline" style="flex:1" onclick="openSourceApp()">各アプリで開く</button>';
+    }
+    document.getElementById('detailModal').classList.add('show');
+  }
+
+  function row(label, val) {
+    return '<tr><th>' + esc(label) + '</th><td>' + esc(val) + '</td></tr>';
+  }
+
+  function openSourceApp() {
+    if (!currentDetail || !currentDetail.webAppUrl) return;
+    var url = currentDetail.webAppUrl;
+    var id = currentDetail.item && currentDetail.item.requestId;
+    if (id) url += (url.indexOf('?') === -1 ? '?' : '&') + 'requestId=' + encodeURIComponent(id);
+    window.top.location.href = url;
+  }
+
+  function closeModal() {
+    document.getElementById('detailModal').classList.remove('show');
+    currentDetail = null;
+  }
+
+  function doApprove() {
+    if (!currentDetail || !confirm('承認しますか？')) return;
+    showLoading(true);
+    google.script.run.withSuccessHandler(function(res) {
+      showLoading(false);
+      closeModal();
+      toast(res.message, !res.success, res.success);
+      if (res.success && res.data) applyRefresh(res.data);
+    }).withFailureHandler(onError).approveApplicationApi(currentDetail.appCode, currentDetail.item.requestId, '');
+  }
+
+  function doReject() {
+    if (!currentDetail) return;
+    var reason = prompt('差戻し理由');
+    if (!reason) return;
+    var targetChoice = '';
+    if (currentDetail.dataType === 'trip' && currentDetail.detail.currentRejectTarget === '差戻し時に選択') {
+      targetChoice = prompt('差戻し先を選択してください\n・申請者\n・ひとつ前の決裁者', '申請者');
+      if (!targetChoice) return;
+    }
+    showLoading(true);
+    google.script.run.withSuccessHandler(function(res) {
+      showLoading(false);
+      closeModal();
+      toast(res.message, !res.success, res.success);
+      if (res.success && res.data) applyRefresh(res.data);
+    }).withFailureHandler(onError).rejectApplicationApi(currentDetail.appCode, currentDetail.item.requestId, reason, targetChoice);
+  }
+
+  function applyRefresh(data) {
+    appData = data;
+    renderMyList(data.myApplications);
+    renderPending(data.pendingApprovals);
+    updatePendingBadge(data.pendingApprovals.length);
+  }
+
+  function refresh(showOverlay) {
+    if (showOverlay !== false) showLoading(true);
+    google.script.run.withSuccessHandler(function(data) {
+      if (showOverlay !== false) showLoading(false);
+      applyRefresh(data);
+    }).withFailureHandler(function(e) {
+      if (showOverlay !== false) showLoading(false);
+      onError(e);
+    }).refreshAppData();
+  }
+
+  function updatePendingBadge(n) {
+    var el = document.getElementById('pendingCount');
+    el.style.display = n > 0 ? '' : 'none';
+    el.textContent = n;
+  }
+
+  function showLoading(s) { document.getElementById('loading').style.display = s ? 'flex' : 'none'; }
+  function toast(msg, err, ok) {
+    var el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = 'toast' + (err ? ' error' : ok ? ' success' : '');
+    el.style.display = 'block';
+    setTimeout(function() { el.style.display = 'none'; }, 4000);
+  }
+  function onError(e) { showLoading(false); toast('エラー: ' + (e.message || e), true); }
+  function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+</script>
+</body>
+</html>

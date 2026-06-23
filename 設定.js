@@ -47,6 +47,40 @@ var PURCHASE_STATUS = {
 
 var MASTER_CACHE_TTL_SEC = 600;
 
+/** ポータル初期データ（申請一覧・承認待ち）のキャッシュ秒数 */
+var PORTAL_DATA_CACHE_TTL_SEC = 120;
+
+/** 業務アプリ別ポータル一覧（全ユーザー共通）のキャッシュ秒数 */
+var PORTAL_APP_ITEMS_CACHE_TTL_SEC = 120;
+
+function portalDataCacheKey_(userEmail) {
+  return 'portal_initial_' + String(userEmail || '').trim().toLowerCase().replace(/[^a-z0-9@._-]/g, '_');
+}
+
+function portalAppItemsCacheKey_(appCode) {
+  return 'portal_app_items_' + String(appCode || '').trim();
+}
+
+function clearAllPortalAppItemsCache_() {
+  try {
+    var cache = CacheService.getScriptCache();
+    loadPortalApps_().forEach(function(app) {
+      var code = String(app.appCode || '').trim();
+      if (code) cache.remove(portalAppItemsCacheKey_(code));
+    });
+  } catch (e) { /* ignore */ }
+}
+
+function clearPortalDataCache_(userEmail) {
+  userEmail = String(userEmail || getCurrentUserEmail_() || '').trim().toLowerCase();
+  if (userEmail) {
+    try {
+      CacheService.getScriptCache().remove(portalDataCacheKey_(userEmail));
+    } catch (e) { /* ignore */ }
+  }
+  clearAllPortalAppItemsCache_();
+}
+
 function normalizeDate(dateInput) {
   var tz = Session.getScriptTimeZone();
   if (!dateInput) return Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');

@@ -26,6 +26,7 @@ function isPendingRecord_(record, dataType, userEmail) {
 function collectItemsFromApp_(app, filterFn) {
   var items = [];
   var dataType = String(app.dataType || '').trim().toLowerCase();
+  var mark = portalPerfStart_('collectItemsFromApp_' + portalPerfAppLabel_(app));
   if (dataType === 'trip') {
     readTripRowsFromApp_(app, filterFn).forEach(function(t) {
       items.push(tripToPortalItem_(t, app));
@@ -39,6 +40,7 @@ function collectItemsFromApp_(app, filterFn) {
       items.push(purchaseToPortalItem_(p, app));
     });
   }
+  portalPerfEnd_(mark, 'dataType=' + dataType + ' items=' + items.length);
   return items;
 }
 

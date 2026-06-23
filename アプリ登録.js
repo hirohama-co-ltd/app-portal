@@ -27,22 +27,34 @@ var DEFAULT_PORTAL_APPS = [
 ];
 
 function loadPortalApps_() {
-  if (!String(WORKFLOW_SS_ID || '').trim()) return DEFAULT_PORTAL_APPS.slice();
+  var mark = portalPerfStart_('loadPortalApps_');
+  if (!String(WORKFLOW_SS_ID || '').trim()) {
+    portalPerfEnd_(mark, 'fallback apps=' + DEFAULT_PORTAL_APPS.length);
+    return DEFAULT_PORTAL_APPS.slice();
+  }
 
   var cacheKey = 'portal_apps_' + WORKFLOW_SS_ID;
   var cached = getCachedJson_(cacheKey);
-  if (cached) return cached;
+  if (cached) {
+    portalPerfEnd_(mark, 'cache=hit apps=' + cached.length);
+    return cached;
+  }
 
   try {
+    var openMark = portalPerfStart_('loadPortalApps_.openById');
     var ss = SpreadsheetApp.openById(WORKFLOW_SS_ID);
+    portalPerfEnd_(openMark);
     var sheet = ss.getSheetByName(SHEET_PORTAL_APPS);
     if (!sheet || sheet.getLastRow() < 2) {
       putCachedJson_(cacheKey, DEFAULT_PORTAL_APPS.slice());
+      portalPerfEnd_(mark, 'cache=miss empty apps=' + DEFAULT_PORTAL_APPS.length);
       return DEFAULT_PORTAL_APPS.slice();
     }
 
+    var readMark = portalPerfStart_('loadPortalApps_.getValues');
     var colCount = Math.max(8, sheet.getLastColumn());
     var data = sheet.getRange(2, 1, sheet.getLastRow(), colCount).getValues();
+    portalPerfEnd_(readMark, 'rows=' + data.length);
     var rows = [];
     for (var i = 0; i < data.length; i++) {
       if (!data[i][0]) continue;
@@ -64,9 +76,11 @@ function loadPortalApps_() {
     });
 
     putCachedJson_(cacheKey, rows);
+    portalPerfEnd_(mark, 'cache=miss apps=' + rows.length);
     return rows;
   } catch (e) {
     Logger.log('ポータルアプリ登録読込エラー: ' + e.message);
+    portalPerfEnd_(mark, 'error=' + e.message);
     return DEFAULT_PORTAL_APPS.slice();
   }
 }

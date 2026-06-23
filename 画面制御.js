@@ -7,11 +7,13 @@ function doGet() {
 }
 
 function getInitialAppData() {
-  return getPortalInitialData();
+  return portalPerfRun_('getInitialAppData', function() {
+    return getPortalInitialData({ useCache: true });
+  });
 }
 
 function refreshAppData() {
-  return refreshPortalData();
+  return portalPerfRun_('refreshAppData', refreshPortalData);
 }
 
 function getApplicationDetailApi(appCode, requestId) {
@@ -32,4 +34,12 @@ function rejectApplicationApi(appCode, requestId, reason, rejectTargetChoice) {
     res.data = refreshPortalData();
   }
   return res;
+}
+
+function getPendingPurchaseMasterCandidatesApi() {
+  return portalPerfRun_('getPendingPurchaseMasterCandidatesApi', getPendingPurchaseMasterCandidatesForPortal_);
+}
+
+function registerPendingPurchaseMasterCandidatesApi(updates) {
+  return registerPendingPurchaseMasterCandidatesFromPortal_(updates);
 }

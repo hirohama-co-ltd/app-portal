@@ -178,6 +178,27 @@
     setupMasterAdmin(data.isMasterAdmin);
     bindTabs();
     if (data.isMasterAdmin) loadPendingMasters();
+    applyDeepLinkFromUrl_();
+  }
+
+  function applyDeepLinkFromUrl_() {
+    var params = new URLSearchParams(window.location.search);
+    var tab = params.get('tab');
+    if (!tab) return;
+
+    var btn = document.querySelector('[data-tab="' + tab + '"]');
+    if (!btn) return;
+    btn.click();
+
+    if (tab === 'approval') {
+      var appCode = params.get('app');
+      var requestId = params.get('requestId');
+      if (appCode && requestId) {
+        setTimeout(function() {
+          openDetail(appCode, requestId, 'approval');
+        }, 350);
+      }
+    }
   }
 
   function showConfigWarnings(warnings) {

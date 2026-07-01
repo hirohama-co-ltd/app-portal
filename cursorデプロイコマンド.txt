@@ -1,0 +1,15 @@
+# 申請ポータル — デプロイ
+
+## 作業ディレクトリ
+cd "\\hinkan-nas\Hinkan-NAS\製造課（削除禁止）\GASアプリ\申請ポータル"
+
+## 更新
+clasp push
+clasp deploy -i AKfycbwLx0zRZApqzd9d3Np8HhMQJzOzp1L_TSvL4xiL_Svrwiguyuk1oLQAcAlSX8F3OGc8 -d "ランチャー通知連携（深いリンク対応）"
+
+## 本番デプロイ情報
+デプロイID: AKfycbwLx0zRZApqzd9d3Np8HhMQJzOzp1L_TSvL4xiL_Svrwiguyuk1oLQAcAlSX8F3OGc8（@35）
+WebアプリURL: https://script.google.com/macros/s/AKfycbwLx0zRZApqzd9d3Np8HhMQJzOzp1L_TSvL4xiL_Svrwiguyuk1oLQAcAlSX8F3OGc8/exec
+
+## 備考
+- 出張申請・出張旅費精算・購買申請の「ポータルに戻る」リンク先URL

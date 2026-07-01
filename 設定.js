@@ -78,6 +78,7 @@ function clearPortalDataCache_(userEmail) {
       CacheService.getScriptCache().remove(portalDataCacheKey_(userEmail));
     } catch (e) { /* ignore */ }
   }
+  clearPortalAppsCache_();
   clearAllPortalAppItemsCache_();
 }
 

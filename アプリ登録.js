@@ -26,23 +26,62 @@ var DEFAULT_PORTAL_APPS = [
   }
 ];
 
-function loadPortalApps_() {
-  if (!String(WORKFLOW_SS_ID || '').trim()) return DEFAULT_PORTAL_APPS.slice();
+function portalAppsCacheKey_() {
+  return 'portal_apps_' + String(WORKFLOW_SS_ID || '').trim();
+}
 
-  var cacheKey = 'portal_apps_' + WORKFLOW_SS_ID;
+function clearPortalAppsCache_() {
+  try {
+    CacheService.getScriptCache().remove(portalAppsCacheKey_());
+  } catch (e) { /* ignore */ }
+}
+
+function isFallbackPortalApps_(apps) {
+  if (!apps || apps.length !== DEFAULT_PORTAL_APPS.length) return false;
+  for (var i = 0; i < apps.length; i++) {
+    if (apps[i].appCode !== DEFAULT_PORTAL_APPS[i].appCode) return false;
+    if (String(apps[i].ssId || '').trim()) return false;
+  }
+  return true;
+}
+
+var portalAppsLastLoadError_ = '';
+
+function getPortalAppsLastLoadError_() {
+  return String(portalAppsLastLoadError_ || '').trim();
+}
+
+function loadPortalApps_() {
+  var mark = portalPerfStart_('loadPortalApps_');
+  portalAppsLastLoadError_ = '';
+  if (!String(WORKFLOW_SS_ID || '').trim()) {
+    portalAppsLastLoadError_ = 'WORKFLOW_SS_ID が未設定です。';
+    portalPerfEnd_(mark, 'fallback apps=' + DEFAULT_PORTAL_APPS.length);
+    return DEFAULT_PORTAL_APPS.slice();
+  }
+
+  var cacheKey = portalAppsCacheKey_();
   var cached = getCachedJson_(cacheKey);
-  if (cached) return cached;
+  if (cached && !isFallbackPortalApps_(cached)) {
+    portalPerfEnd_(mark, 'cache=hit apps=' + cached.length);
+    return cached;
+  }
 
   try {
+    var openMark = portalPerfStart_('loadPortalApps_.openById');
     var ss = SpreadsheetApp.openById(WORKFLOW_SS_ID);
+    portalPerfEnd_(openMark);
     var sheet = ss.getSheetByName(SHEET_PORTAL_APPS);
     if (!sheet || sheet.getLastRow() < 2) {
-      putCachedJson_(cacheKey, DEFAULT_PORTAL_APPS.slice());
+      portalAppsLastLoadError_ = 'ワークフローブックに「' + SHEET_PORTAL_APPS + '」シートが見つからないか、データ行がありません。';
+      portalPerfEnd_(mark, 'empty sheet');
       return DEFAULT_PORTAL_APPS.slice();
     }
 
+    var readMark = portalPerfStart_('loadPortalApps_.getValues');
     var colCount = Math.max(8, sheet.getLastColumn());
     var data = sheet.getRange(2, 1, sheet.getLastRow(), colCount).getValues();
+    portalPerfEnd_(readMark, 'rows=' + data.length);
     var rows = [];
     for (var i = 0; i < data.length; i++) {
       if (!data[i][0]) continue;
@@ -63,10 +102,18 @@ function loadPortalApps_() {
       return a.appName.localeCompare(b.appName);
     });
 
-    putCachedJson_(cacheKey, rows);
-    return rows;
+    if (rows.length) {
+      putCachedJson_(cacheKey, rows);
+    } else {
+      clearPortalAppsCache_();
+    }
+    portalPerfEnd_(mark, 'cache=miss apps=' + rows.length);
+    return rows.length ? rows : DEFAULT_PORTAL_APPS.slice();
   } catch (e) {
-    Logger.log('ポータルアプリ登録読込エラー: ' + e.message);
+    portalAppsLastLoadError_ = e.message || String(e);
+    Logger.log('ポータルアプリ登録読込エラー: ' + portalAppsLastLoadError_);
+    clearPortalAppsCache_();
+    portalPerfEnd_(mark, 'error=' + portalAppsLastLoadError_);
     return DEFAULT_PORTAL_APPS.slice();
   }
 }
@@ -104,7 +151,12 @@ function getPortalLaunchers_() {
 
 function getPortalConfigWarnings_() {
   var warnings = [];
-  loadPortalApps_().forEach(function(a) {
+  var apps = loadPortalApps_();
+  var loadError = getPortalAppsLastLoadError_();
+  if (loadError) {
+    warnings.push('ポータルアプリ登録の読込エラー: ' + loadError);
+  }
+  apps.forEach(function(a) {
     if (a.active === false) return;
     if (!isSupportedDataType_(a.dataType)) {
       warnings.push(a.appName + ' のデータ種別「' + a.dataType + '」は未対応です（開発者に連絡）');

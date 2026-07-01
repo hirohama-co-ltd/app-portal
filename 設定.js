@@ -30,12 +30,57 @@ var CLAIM_STATUS = {
   SETTLED: '精算完了'
 };
 
+/** 購買申請ステータス */
+var PURCHASE_STATUS = {
+  DRAFT: '下書き',
+  SUBMITTED: '申請中',
+  APPROVED: '承認済',
+  REJECTED: '差戻し',
+  WITHDRAWN: '取り下げ',
+  CANCELLED: '取消'
+};
+
 /**
  * 業務アプリ登録はワークフロー設定ブックの「ポータルアプリ登録」シートで管理。
  * Web UI「ポータル連携」タブから随時追加可能（申請ポータルのコード変更不要）。
  */
 
 var MASTER_CACHE_TTL_SEC = 600;
+
+/** ポータル初期データ（申請一覧・承認待ち）のキャッシュ秒数 */
+var PORTAL_DATA_CACHE_TTL_SEC = 120;
+
+/** 業務アプリ別ポータル一覧（全ユーザー共通）のキャッシュ秒数 */
+var PORTAL_APP_ITEMS_CACHE_TTL_SEC = 120;
+
+function portalDataCacheKey_(userEmail) {
+  return 'portal_initial_' + String(userEmail || '').trim().toLowerCase().replace(/[^a-z0-9@._-]/g, '_');
+}
+
+function portalAppItemsCacheKey_(appCode) {
+  return 'portal_app_items_' + String(appCode || '').trim();
+}
+
+function clearAllPortalAppItemsCache_() {
+  try {
+    var cache = CacheService.getScriptCache();
+    loadPortalApps_().forEach(function(app) {
+      var code = String(app.appCode || '').trim();
+      if (code) cache.remove(portalAppItemsCacheKey_(code));
+    });
+  } catch (e) { /* ignore */ }
+}
+
+function clearPortalDataCache_(userEmail) {
+  userEmail = String(userEmail || getCurrentUserEmail_() || '').trim().toLowerCase();
+  if (userEmail) {
+    try {
+      CacheService.getScriptCache().remove(portalDataCacheKey_(userEmail));
+    } catch (e) { /* ignore */ }
+  }
+  clearPortalAppsCache_();
+  clearAllPortalAppItemsCache_();
+}
 
 function normalizeDate(dateInput) {
   var tz = Session.getScriptTimeZone();

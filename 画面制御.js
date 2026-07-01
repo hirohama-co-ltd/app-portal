@@ -6,12 +6,25 @@ function doGet() {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
+function refreshPortalAppsCacheApi() {
+  clearPortalAppsCache_();
+  clearAllPortalAppItemsCache_();
+  var apps = loadPortalApps_();
+  return {
+    success: !getPortalAppsLastLoadError_(),
+    message: getPortalAppsLastLoadError_() || ('ポータルアプリ登録を再読込しました（' + apps.length + ' 件）'),
+    apps: apps
+  };
+}
+
 function getInitialAppData() {
-  return getPortalInitialData();
+  return portalPerfRun_('getInitialAppData', function() {
+    return getPortalInitialData({ useCache: true });
+  });
 }
 
 function refreshAppData() {
-  return refreshPortalData();
+  return portalPerfRun_('refreshAppData', refreshPortalData);
 }
 
 function getApplicationDetailApi(appCode, requestId) {
@@ -32,4 +45,12 @@ function rejectApplicationApi(appCode, requestId, reason, rejectTargetChoice) {
     res.data = refreshPortalData();
   }
   return res;
+}
+
+function getPendingPurchaseMasterCandidatesApi() {
+  return portalPerfRun_('getPendingPurchaseMasterCandidatesApi', getPendingPurchaseMasterCandidatesForPortal_);
+}
+
+function registerPendingPurchaseMasterCandidatesApi(updates) {
+  return registerPendingPurchaseMasterCandidatesFromPortal_(updates);
 }

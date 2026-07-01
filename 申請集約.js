@@ -54,42 +54,49 @@ function claimToPortalItem_(claim, app) {
   };
 }
 
-function listMyApplications() {
-  var userEmail = getCurrentUserEmail_();
-  if (!userEmail) return [];
-
-  var items = [];
-  getActivePortalApps_().forEach(function(app) {
-    items = items.concat(collectItemsFromApp_(app, function(r) {
-      return r.applicantEmail === userEmail;
-    }));
-  });
-
-  items.sort(function(a, b) {
-    return (b.updatedAt || b.requestDate || '').localeCompare(a.updatedAt || a.requestDate || '');
-  });
-  return items;
+function purchaseToPortalItem_(purchase, app) {
+  return {
+    appCode: app.appCode,
+    appName: app.appName,
+    dataType: 'purchase',
+    requestId: purchase.purchaseRequestId,
+    requestDate: purchase.requestDate,
+    applicantEmail: purchase.applicantEmail,
+    applicantName: purchase.applicantName,
+    title: purchase.itemName,
+    subtitle: purchase.purpose,
+    status: purchase.status,
+    extraStatus: purchase.supplier || '',
+    masterStatus: purchase.masterStatus || '登録済',
+    unregisteredMasterCount: purchase.unregisteredMasterCount || 0,
+    tripStart: purchase.desiredDate,
+    tripEnd: purchase.desiredDate,
+    amount: purchase.totalAmount,
+    approverEmail: purchase.approverEmail,
+    routeId: purchase.routeId,
+    currentStep: purchase.currentStep,
+    totalSteps: purchase.totalSteps,
+    currentStepName: purchase.currentStepName,
+    updatedAt: purchase.updatedAt,
+    webAppUrl: app.webAppUrl || ''
+  };
 }
 
-function listPendingApprovals() {
-  var userEmail = getCurrentUserEmail_();
-  if (!userEmail) return [];
-
-  var items = [];
-  getActivePortalApps_().forEach(function(app) {
-    items = items.concat(collectItemsFromApp_(app, function(r) {
-      return isPendingRecord_(r, app.dataType, userEmail);
-    }));
-  });
-
-  items.sort(function(a, b) {
-    return (a.requestDate || '').localeCompare(b.requestDate || '');
-  });
-  return items;
+function isPurchaseMasterPendingNotice_(item, employee) {
+  return item && item.dataType === 'purchase' &&
+    item.status === PURCHASE_STATUS.APPROVED &&
+    item.masterStatus === 'マスタ未登録あり' &&
+    employeeHasRole_(employee, 'ワークフロー管理者');
 }
 
 function canViewApplication_(app, record, userEmail) {
   if (!record || !userEmail) return false;
+  if (String(app.dataType || '').trim().toLowerCase() === 'purchase' &&
+      record.status === PURCHASE_STATUS.APPROVED &&
+      record.masterStatus === 'マスタ未登録あり' &&
+      employeeHasRole_(findEmployeeByEmail(userEmail), 'ワークフロー管理者')) {
+    return true;
+  }
   return record.applicantEmail === userEmail || record.approverEmail === userEmail;
 }
 
@@ -104,22 +111,196 @@ function getApplicationDetail(appCode, requestId) {
   return getApplicationDetailByType_(app, requestId, getCurrentUserEmail_());
 }
 
-function getPortalInitialData() {
+function getPortalInitialData(options) {
+  options = options || {};
   var userEmail = getCurrentUserEmail_();
+
+  if (options.useCache !== false && userEmail) {
+    var cacheMark = portalPerfStart_('getPortalInitialData.cache');
+    var cached = getCachedJson_(portalDataCacheKey_(userEmail));
+    portalPerfEnd_(cacheMark, cached ? 'hit' : 'miss');
+    if (cached) {
+      Logger.log('[portal-perf] getPortalInitialData: cache=hit my=' +
+        (cached.myApplications || []).length + ' pending=' + (cached.pendingApprovals || []).length);
+      console.log('[portal-perf] getPortalInitialData: cache=hit');
+      return cached;
+    }
+  } else {
+    Logger.log('[portal-perf] getPortalInitialData: cache=skip (force reload)');
+    console.log('[portal-perf] getPortalInitialData: cache=skip (force reload)');
+  }
+
+  var data = buildPortalInitialData_();
+  if (userEmail) {
+    putCachedJson_(portalDataCacheKey_(userEmail), data, PORTAL_DATA_CACHE_TTL_SEC);
+  }
+  return data;
+}
+
+function buildPortalInitialData_() {
+  var totalMark = portalPerfStart_('buildPortalInitialData_');
+  var userEmail = getCurrentUserEmail_();
+
+  var employeeMark = portalPerfStart_('findEmployeeByEmail');
   var employee = findEmployeeByEmail(userEmail);
-  var pending = listPendingApprovals();
+  portalPerfEnd_(employeeMark);
+  var isMasterAdmin = employeeHasRole_(employee, 'ワークフロー管理者');
+
+  var myApplications = [];
+  var pendingApprovals = [];
+
+  if (userEmail) {
+    var appsMark = portalPerfStart_('getActivePortalApps_');
+    var apps = getActivePortalApps_();
+    portalPerfEnd_(appsMark, 'apps=' + apps.length);
+
+    var collectMark = portalPerfStart_('collectAllApps');
+    collectPortalItemsFromApps_(apps, { useAppCache: true }).forEach(function(item) {
+      if (item.applicantEmail === userEmail) myApplications.push(item);
+      if (isPendingRecord_(item, item.dataType, userEmail) || isPurchaseMasterPendingNotice_(item, employee)) {
+        pendingApprovals.push(item);
+      }
+    });
+    portalPerfEnd_(collectMark, 'my=' + myApplications.length + ' pending=' + pendingApprovals.length);
+
+    var sortMark = portalPerfStart_('sortLists');
+    myApplications.sort(function(a, b) {
+      return (b.updatedAt || b.requestDate || '').localeCompare(a.updatedAt || a.requestDate || '');
+    });
+    pendingApprovals.sort(function(a, b) {
+      return (a.requestDate || '').localeCompare(b.requestDate || '');
+    });
+    portalPerfEnd_(sortMark);
+  }
+
+  var launchersMark = portalPerfStart_('getPortalLaunchers_');
+  var launchers = getPortalLaunchers_();
+  portalPerfEnd_(launchersMark, 'launchers=' + launchers.length);
+
+  var warningsMark = portalPerfStart_('getPortalConfigWarnings_');
+  var configWarnings = getPortalConfigWarnings_();
+  portalPerfEnd_(warningsMark, 'warnings=' + configWarnings.length);
+
+  var workflowMark = portalPerfStart_('isWorkflowLinked_');
+  var workflowLinked = isWorkflowLinked_();
+  portalPerfEnd_(workflowMark, 'linked=' + workflowLinked);
+
+  portalPerfEnd_(totalMark, 'my=' + myApplications.length + ' pending=' + pendingApprovals.length);
 
   return {
     userEmail: userEmail,
     employee: employee,
-    launchers: getPortalLaunchers_(),
-    myApplications: listMyApplications(),
-    pendingApprovals: pending,
-    configWarnings: getPortalConfigWarnings_(),
-    workflowLinked: isWorkflowLinked_()
+    isMasterAdmin: isMasterAdmin,
+    launchers: launchers,
+    myApplications: myApplications,
+    pendingApprovals: pendingApprovals,
+    configWarnings: configWarnings,
+    workflowLinked: workflowLinked
   };
 }
 
 function refreshPortalData() {
-  return getPortalInitialData();
+  clearPortalDataCache_(getCurrentUserEmail_());
+  return getPortalInitialData({ useCache: false });
+}
+
+function getPendingPurchaseMasterCandidatesForPortal_() {
+  return portalPerfRun_('getPendingPurchaseMasterCandidatesForPortal_', function() {
+    if (!employeeHasRole_(findEmployeeByEmail(getCurrentUserEmail_()), 'ワークフロー管理者')) {
+      return { success: false, message: '未登録マスタ管理の権限がありません。', candidates: [] };
+    }
+
+    var candidates = [];
+    getActivePortalApps_().forEach(function(app) {
+      if (String(app.dataType || '').trim().toLowerCase() !== 'purchase') return;
+      readUnregisteredPurchaseMastersFromApp_(app, function(row) {
+        return row.status === '未登録';
+      }).forEach(function(row) {
+        candidates.push(row);
+      });
+    });
+    candidates.sort(function(a, b) {
+      return (b.updatedAt || '').localeCompare(a.updatedAt || '');
+    });
+    Logger.log('[portal-perf] getPendingPurchaseMasterCandidatesForPortal_ | candidates=' + candidates.length);
+    console.log('[portal-perf] getPendingPurchaseMasterCandidatesForPortal_ | candidates=' + candidates.length);
+    return { success: true, candidates: candidates };
+  });
+}
+
+function registerPendingPurchaseMasterCandidatesFromPortal_(updates) {
+  if (!employeeHasRole_(findEmployeeByEmail(getCurrentUserEmail_()), 'ワークフロー管理者')) {
+    return { success: false, message: '未登録マスタ管理の権限がありません。' };
+  }
+  updates = updates || [];
+  if (!updates.length) return { success: false, message: '登録対象がありません。' };
+
+  var byApp = {};
+  updates.forEach(function(update) {
+    var appCode = String(update.appCode || '').trim();
+    var candidateId = String(update.candidateId || '').trim();
+    if (!appCode || !candidateId) return;
+    if (!byApp[appCode]) byApp[appCode] = {};
+    byApp[appCode][candidateId] = {
+      officialName: String(update.officialName || '').trim(),
+      code: String(update.code || '').trim(),
+      aliases: String(update.aliases || '').trim()
+    };
+  });
+
+  var now = formatDateTime(new Date());
+  var userEmail = getCurrentUserEmail_();
+  var processed = 0;
+  var messages = [];
+
+  Object.keys(byApp).forEach(function(appCode) {
+    var app = getPortalAppByCode_(appCode);
+    if (!app || String(app.dataType || '').trim().toLowerCase() !== 'purchase') return;
+
+    var targetMap = byApp[appCode];
+    var rows = readUnregisteredPurchaseMastersFromApp_(app);
+    var affected = {};
+
+    rows.forEach(function(row) {
+      var update = targetMap[row.candidateId];
+      if (!update || row.status !== '未登録') return;
+      if (!update.officialName) {
+        messages.push(app.appName + ' / ' + row.type + '「' + row.inputName + '」: 正式表示名が未入力です。');
+        return;
+      }
+
+      row.officialName = update.officialName;
+      row.code = update.code;
+      row.aliases = update.aliases;
+      row.officialName = appendOrMergePurchaseMasterRowFromPortal_(
+        app,
+        row.type,
+        row.code,
+        row.officialName,
+        mergePurchaseMasterAliasValues_(row.inputName, row.aliases)
+      );
+      applyOfficialPurchaseMasterNameFromPortal_(app, row);
+      row.status = '登録済';
+      row.updatedAt = now;
+      row.registeredAt = now;
+      row.processedBy = userEmail;
+      affected[row.purchaseRequestId] = true;
+      processed++;
+    });
+
+    writeUnregisteredPurchaseMastersToApp_(app, rows);
+    rows = readUnregisteredPurchaseMastersFromApp_(app);
+    Object.keys(affected).forEach(function(purchaseRequestId) {
+      updatePurchaseMasterStatusFromPortal_(app, purchaseRequestId, rows);
+    });
+  });
+
+  var result = getPendingPurchaseMasterCandidatesForPortal_();
+  return {
+    success: true,
+    message: '正式登録処理が完了しました。\n登録: ' + processed + ' 件' +
+      (messages.length ? '\n\n【未処理】\n' + messages.join('\n') : ''),
+    candidates: result.candidates || [],
+    data: refreshPortalData()
+  };
 }

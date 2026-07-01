@@ -13,23 +13,37 @@ var EMPLOYEE_COLUMN_ALIASES = {
 };
 
 function loadEmployeesFromSheet() {
-  if (!MASTER_SS_ID) return [];
+  var mark = portalPerfStart_('loadEmployeesFromSheet');
+  if (!MASTER_SS_ID) {
+    portalPerfEnd_(mark, 'no MASTER_SS_ID');
+    return [];
+  }
   var cacheKey = 'employees_' + MASTER_SS_ID;
   var cached = getCachedJson_(cacheKey);
-  if (cached) return cached;
+  if (cached) {
+    portalPerfEnd_(mark, 'cache=hit employees=' + cached.length);
+    return cached;
+  }
 
   try {
+    var openMark = portalPerfStart_('loadEmployeesFromSheet.openById');
     var masterSs = SpreadsheetApp.openById(MASTER_SS_ID);
+    portalPerfEnd_(openMark);
     var sheet = masterSs.getSheetByName(EMPLOYEE_MASTER_SHEET_NAME);
     if (!sheet || sheet.getLastRow() < 2) {
       putCachedJson_(cacheKey, []);
+      portalPerfEnd_(mark, 'cache=miss empty');
       return [];
     }
+    var readMark = portalPerfStart_('loadEmployeesFromSheet.parse');
     var list = parseEmployeeRowsFromSheet_(sheet);
+    portalPerfEnd_(readMark, 'employees=' + list.length);
     putCachedJson_(cacheKey, list);
+    portalPerfEnd_(mark, 'cache=miss employees=' + list.length);
     return list;
   } catch (e) {
     Logger.log('社員マスタ読込エラー: ' + e.message);
+    portalPerfEnd_(mark, 'error=' + e.message);
     return [];
   }
 }

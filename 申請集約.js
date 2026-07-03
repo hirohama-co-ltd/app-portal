@@ -71,7 +71,13 @@ function purchaseToPortalItem_(purchase, app) {
     unregisteredMasterCount: purchase.unregisteredMasterCount || 0,
     tripStart: purchase.desiredDate,
     tripEnd: purchase.desiredDate,
-    amount: purchase.totalAmount,
+    amount: (purchase.currency && purchase.currency !== 'JPY')
+      ? (purchase.estimatedJpyAmount || purchase.totalAmount)
+      : purchase.totalAmount,
+    currency: purchase.currency || 'JPY',
+    exchangeRate: purchase.exchangeRate || 1,
+    estimatedJpyAmount: purchase.estimatedJpyAmount || purchase.totalAmount,
+    originalAmount: purchase.totalAmount,
     approverEmail: purchase.approverEmail,
     routeId: purchase.routeId,
     currentStep: purchase.currentStep,

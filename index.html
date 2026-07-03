@@ -400,7 +400,14 @@
     } else if (res.dataType === 'purchase') {
       html += row('購入先', d.supplier || '-');
       html += row('マスタ登録状態', d.masterStatus || item.masterStatus || '登録済');
-      html += row('合計', Number(d.totalAmount || 0).toLocaleString() + ' 円');
+      var purchaseCurrency = d.currency || 'JPY';
+      if (purchaseCurrency === 'JPY') {
+        html += row('合計', Number(d.totalAmount || 0).toLocaleString() + ' 円');
+      } else {
+        html += row('合計', Number(d.totalAmount || 0).toLocaleString() + ' ' + purchaseCurrency);
+        html += row('為替レート', '1 ' + purchaseCurrency + ' = ' + Number(d.exchangeRate || 0).toLocaleString() + ' 円');
+        html += row('予想金額（円）', Number(d.estimatedJpyAmount || 0).toLocaleString() + ' 円');
+      }
       html += row('予算区分', d.budgetCategory || '-');
       html += row('支払方法', d.paymentMethod || '-');
       if (d.totalSteps > 1) {

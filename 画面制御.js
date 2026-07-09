@@ -9,6 +9,7 @@ function doGet() {
 function refreshPortalAppsCacheApi() {
   clearPortalAppsCache_();
   clearAllPortalAppItemsCache_();
+  ensureLeavePortalAppRegistered_();
   var apps = loadPortalApps_();
   return {
     success: !getPortalAppsLastLoadError_(),

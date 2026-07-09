@@ -208,6 +208,14 @@
     el.textContent = '設定確認:\n' + warnings.join('\n');
   }
 
+  function launcherIcon(dataType) {
+    if (dataType === 'trip') return '✈️';
+    if (dataType === 'claim') return '💴';
+    if (dataType === 'purchase') return '🛒';
+    if (dataType === 'leave') return '📋';
+    return '📝';
+  }
+
   function renderLaunchers(launchers) {
     var el = document.getElementById('launcherGrid');
     if (!launchers || !launchers.length) {
@@ -215,7 +223,7 @@
       return;
     }
     el.innerHTML = launchers.map(function(l) {
-      var icon = l.dataType === 'trip' ? '✈️' : '💴';
+      var icon = launcherIcon(l.dataType);
       var disabled = !l.hasUrl;
       var note = disabled ? 'URL未設定' : 'クリックで開く';
       return '<div class="launcher-card' + (disabled ? ' disabled' : '') + '" data-url="' + esc(l.webAppUrl) + '" data-name="' + esc(l.appName) + '">' +
@@ -226,7 +234,12 @@
     el.querySelectorAll('.launcher-card:not(.disabled)').forEach(function(card) {
       card.onclick = function() {
         var url = card.getAttribute('data-url');
-        if (url) window.top.location.href = url;
+        if (!url) return;
+        try {
+          window.top.location.href = url;
+        } catch (e) {
+          window.location.href = url;
+        }
       };
     });
   }

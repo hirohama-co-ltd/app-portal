@@ -45,6 +45,10 @@ var PURCHASE_STATUS = {
  * Web UI「ポータル連携」タブから随時追加可能（申請ポータルのコード変更不要）。
  */
 
+/** 休暇・届出申請書（ポータル起動用） */
+var LEAVE_PORTAL_APP_CODE = 'LEAVE_REQUEST';
+var LEAVE_FORM_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbykWKUoG6bSdLsdAnlRAPVkoZjxTbXd-iAAnxrMFrlyMlGxJO2xFRU06rB5J2sTrm7iCA/exec';
+
 var MASTER_CACHE_TTL_SEC = 600;
 
 /** ポータル初期データ（申請一覧・承認待ち）のキャッシュ秒数 */

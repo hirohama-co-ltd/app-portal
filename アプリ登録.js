@@ -51,6 +51,81 @@ function getPortalAppsLastLoadError_() {
   return String(portalAppsLastLoadError_ || '').trim();
 }
 
+/**
+ * 休暇・届出申請書をポータルアプリ登録シートに追加、または URL を最新化する
+ */
+function ensureLeavePortalAppRegistered_() {
+  if (!String(WORKFLOW_SS_ID || '').trim()) return false;
+
+  try {
+    var ss = SpreadsheetApp.openById(WORKFLOW_SS_ID);
+    var sheet = ss.getSheetByName(SHEET_PORTAL_APPS);
+    if (!sheet) return false;
+
+    var lastRow = sheet.getLastRow();
+    var foundRow = -1;
+    if (lastRow >= 2) {
+      var codes = sheet.getRange(2, 1, lastRow, 1).getValues();
+      for (var i = 0; i < codes.length; i++) {
+        if (String(codes[i][0] || '').trim() === LEAVE_PORTAL_APP_CODE) {
+          foundRow = i + 2;
+          break;
+        }
+      }
+    }
+
+    if (foundRow > 0) {
+      var rowValues = sheet.getRange(foundRow, 1, foundRow, 8).getValues()[0];
+      var changed = false;
+
+      if (String(rowValues[1] || '').trim() !== '休暇・届出申請書') {
+        rowValues[1] = '休暇・届出申請書';
+        changed = true;
+      }
+      if (String(rowValues[2] || '').trim().toLowerCase() !== 'leave') {
+        rowValues[2] = 'leave';
+        changed = true;
+      }
+      if (String(rowValues[4] || '').trim() !== LEAVE_FORM_WEBAPP_URL) {
+        rowValues[4] = LEAVE_FORM_WEBAPP_URL;
+        changed = true;
+      }
+      if (String(rowValues[5] || 'Y').trim().toUpperCase() !== 'Y') {
+        rowValues[5] = 'Y';
+        changed = true;
+      }
+      if (!parseInt(rowValues[6], 10)) {
+        rowValues[6] = 50;
+        changed = true;
+      }
+
+      if (changed) {
+        sheet.getRange(foundRow, 1, foundRow, 8).setValues([rowValues]);
+        clearPortalAppsCache_();
+        Logger.log('休暇・届出申請書のポータル登録を更新しました。');
+      }
+      return changed;
+    }
+
+    sheet.appendRow([
+      LEAVE_PORTAL_APP_CODE,
+      '休暇・届出申請書',
+      'leave',
+      '',
+      LEAVE_FORM_WEBAPP_URL,
+      'Y',
+      50,
+      '休暇・届出申請フォーム'
+    ]);
+    clearPortalAppsCache_();
+    Logger.log('休暇・届出申請書をポータルアプリ登録シートに追加しました。');
+    return true;
+  } catch (e) {
+    Logger.log('ensureLeavePortalAppRegistered_ エラー: ' + (e.message || e));
+    return false;
+  }
+}
+
 function loadPortalApps_() {
   var mark = portalPerfStart_('loadPortalApps_');
   portalAppsLastLoadError_ = '';
@@ -59,6 +134,8 @@ function loadPortalApps_() {
     portalPerfEnd_(mark, 'fallback apps=' + DEFAULT_PORTAL_APPS.length);
     return DEFAULT_PORTAL_APPS.slice();
   }
+
+  ensureLeavePortalAppRegistered_();
 
   var cacheKey = portalAppsCacheKey_();
   var cached = getCachedJson_(cacheKey);
@@ -158,10 +235,10 @@ function getPortalConfigWarnings_() {
   }
   apps.forEach(function(a) {
     if (a.active === false) return;
-    if (!isSupportedDataType_(a.dataType)) {
+    if (!isSupportedDataType_(a.dataType) && !isLauncherOnlyDataType_(a.dataType)) {
       warnings.push(a.appName + ' のデータ種別「' + a.dataType + '」は未対応です（開発者に連絡）');
     }
-    if (!String(a.ssId || '').trim()) {
+    if (!isLauncherOnlyDataType_(a.dataType) && !String(a.ssId || '').trim()) {
       warnings.push(a.appName + ' の ssId が未設定です（ワークフロー設定 → ポータル連携）');
     }
     if (!String(a.webAppUrl || '').trim()) {

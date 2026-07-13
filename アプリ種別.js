@@ -5,8 +5,15 @@
 
 var SUPPORTED_DATA_TYPES = ['trip', 'claim', 'purchase'];
 
+/** ポータルからリンク起動のみ（申請一覧・承認待ちには出さない） */
+var LAUNCHER_ONLY_DATA_TYPES = ['leave'];
+
 function isSupportedDataType_(dataType) {
   return SUPPORTED_DATA_TYPES.indexOf(String(dataType || '').trim().toLowerCase()) >= 0;
+}
+
+function isLauncherOnlyDataType_(dataType) {
+  return LAUNCHER_ONLY_DATA_TYPES.indexOf(String(dataType || '').trim().toLowerCase()) >= 0;
 }
 
 function isPendingRecord_(record, dataType, userEmail) {

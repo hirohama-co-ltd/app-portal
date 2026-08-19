@@ -40,6 +40,21 @@ var PURCHASE_STATUS = {
   CANCELLED: '取消'
 };
 
+/** 休暇届出申請の承認待ち系ステータス（休暇アプリの既存値をそのまま使用。申請中へ変換しない） */
+var LEAVE_WAIT_STATUSES = [
+  '係長承認待ち',
+  '部署長承認待ち',
+  '事業所長承認待ち',
+  '常務承認待ち',
+  '管理課承認待ち',
+  '承認待ち',
+  '再申請'
+];
+
+function isLeaveWaitingStatusForPortal_(status) {
+  return LEAVE_WAIT_STATUSES.indexOf(String(status || '').trim()) >= 0;
+}
+
 /**
  * 業務アプリ登録はワークフロー設定ブックの「ポータルアプリ登録」シートで管理。
  * Web UI「ポータル連携」タブから随時追加可能（申請ポータルのコード変更不要）。

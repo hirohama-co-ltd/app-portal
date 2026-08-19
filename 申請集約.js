@@ -54,6 +54,41 @@ function claimToPortalItem_(claim, app) {
   };
 }
 
+function leaveToPortalItem_(leave, app) {
+  leave = leave || {};
+  return {
+    appCode: app.appCode,
+    appName: app.appName,
+    dataType: 'leave',
+    requestId: leave.leaveRequestId,
+    requestDate: leave.applicationDate || leave.submittedAt || '',
+    applicantEmail: leave.applicantEmail,
+    applicantName: leave.employeeName,
+    title: leave.leaveType,
+    subtitle: leave.durationType || leave.reason || '',
+    status: leave.status,
+    extraStatus: leave.department || '',
+    tripStart: leave.acquisitionDate,
+    tripEnd: leave.acquisitionDate,
+    amount: 0,
+    approverEmail: leave.currentApproverEmail,
+    routeId: leave.routeId || '',
+    currentStep: leave.currentStep || 0,
+    totalSteps: leave.totalSteps || 0,
+    currentStepName: leave.currentStepName || '',
+    updatedAt: leave.updatedAt || leave.submittedAt || '',
+    webAppUrl: app.webAppUrl || ''
+  };
+}
+
+function isLeavePendingForPortalUser_(item, userEmail) {
+  if (!item || item.dataType !== 'leave') return false;
+  userEmail = String(userEmail || '').trim().toLowerCase();
+  if (!userEmail) return false;
+  if (!isLeaveWaitingStatusForPortal_(item.status)) return false;
+  return String(item.approverEmail || '').trim().toLowerCase() === userEmail;
+}
+
 function purchaseToPortalItem_(purchase, app) {
   return {
     appCode: app.appCode,
@@ -162,6 +197,16 @@ function buildPortalInitialData_() {
 
     var collectMark = portalPerfStart_('collectAllApps');
     collectPortalItemsFromApps_(apps, { useAppCache: true }).forEach(function(item) {
+      if (item.dataType === 'leave') {
+        var leaveEmail = String(userEmail || '').trim().toLowerCase();
+        if (String(item.applicantEmail || '').trim().toLowerCase() === leaveEmail) {
+          myApplications.push(item);
+        }
+        if (isPendingRecord_(item, item.dataType, userEmail)) {
+          pendingApprovals.push(item);
+        }
+        return;
+      }
       if (item.applicantEmail === userEmail) myApplications.push(item);
       if (isPendingRecord_(item, item.dataType, userEmail) || isPurchaseMasterPendingNotice_(item, employee)) {
         pendingApprovals.push(item);

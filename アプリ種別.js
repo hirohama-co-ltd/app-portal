@@ -3,10 +3,10 @@
 // 新規アプリ追加時: ここに種別を追加し、外部データ.js に読み書きを実装
 // ========================================
 
-var SUPPORTED_DATA_TYPES = ['trip', 'claim', 'purchase'];
+var SUPPORTED_DATA_TYPES = ['trip', 'claim', 'purchase', 'leave'];
 
 /** ポータルからリンク起動のみ（申請一覧・承認待ちには出さない） */
-var LAUNCHER_ONLY_DATA_TYPES = ['leave'];
+var LAUNCHER_ONLY_DATA_TYPES = [];
 
 function isSupportedDataType_(dataType) {
   return SUPPORTED_DATA_TYPES.indexOf(String(dataType || '').trim().toLowerCase()) >= 0;
@@ -27,6 +27,9 @@ function isPendingRecord_(record, dataType, userEmail) {
   if (dataType === 'purchase') {
     return record.status === PURCHASE_STATUS.SUBMITTED && record.approverEmail === userEmail;
   }
+  if (dataType === 'leave') {
+    return isLeavePendingForPortalUser_(record, userEmail);
+  }
   return false;
 }
 
@@ -45,6 +48,10 @@ function collectItemsFromApp_(app, filterFn) {
   } else if (dataType === 'purchase') {
     readPurchaseRowsFromApp_(app, filterFn).forEach(function(p) {
       items.push(purchaseToPortalItem_(p, app));
+    });
+  } else if (dataType === 'leave') {
+    readLeaveRowsFromApp_(app, filterFn).forEach(function(row) {
+      items.push(leaveToPortalItem_(row, app));
     });
   }
   portalPerfEnd_(mark, 'dataType=' + dataType + ' items=' + items.length);

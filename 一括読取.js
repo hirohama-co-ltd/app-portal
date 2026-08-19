@@ -12,6 +12,7 @@ function portalListSheetSpec_(dataType) {
   if (dataType === 'trip') return { sheetName: TRIP_SHEET, range: range };
   if (dataType === 'claim') return { sheetName: CLAIM_SHEET, range: range };
   if (dataType === 'purchase') return { sheetName: PURCHASE_SHEET, range: range };
+  if (dataType === 'leave') return { sheetName: LEAVE_SHEET, range: range };
   return null;
 }
 
@@ -126,11 +127,27 @@ function parsePurchasePortalItemsFromValues_(app, values) {
   return items;
 }
 
+function parseLeavePortalItemsFromValues_(app, values) {
+  if (!values || values.length < 2) return [];
+  var headers = values[0].map(function(h) { return String(h || '').trim(); });
+  var colMap = mapHeaderColumns_(headers);
+  var items = [];
+  for (var i = 1; i < values.length; i++) {
+    var row = values[i];
+    if (!row || !row[0]) continue;
+    var mapped = mapLeaveRowFromPortal_(row, colMap);
+    if (!mapped.leaveRequestId) continue;
+    items.push(leaveToPortalItem_(mapped, app));
+  }
+  return items;
+}
+
 function parsePortalItemsFromSheetValues_(app, values) {
   var dataType = String(app.dataType || '').trim().toLowerCase();
   if (dataType === 'trip') return parseTripPortalItemsFromValues_(app, values);
   if (dataType === 'claim') return parseClaimPortalItemsFromValues_(app, values);
   if (dataType === 'purchase') return parsePurchasePortalItemsFromValues_(app, values);
+  if (dataType === 'leave') return parseLeavePortalItemsFromValues_(app, values);
   return [];
 }
 

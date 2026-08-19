@@ -36,12 +36,21 @@
     .app-tag-trip { background: #ccfbf1; color: #0f766e; }
     .app-tag-claim { background: #dbeafe; color: #1d4ed8; }
     .app-tag-purchase { background: #fef3c7; color: #92400e; }
+    .app-tag-leave { background: #fce7f3; color: #9d174d; }
     .item-title { font-weight: bold; font-size: 14px; }
     .item-meta { font-size: 12px; color: #64748b; margin-top: 4px; }
     .status-badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
     .status-下書き { background: #e2e8f0; color: #475569; }
     .status-申請中 { background: #dbeafe; color: #1d4ed8; }
     .status-承認済 { background: #d1fae5; color: #065f46; }
+    .status-承認待ち,
+    .status-係長承認待ち,
+    .status-部署長承認待ち,
+    .status-事業所長承認待ち,
+    .status-常務承認待ち,
+    .status-管理課承認待ち,
+    .status-再申請 { background: #dbeafe; color: #1d4ed8; }
+    .status-承認済み { background: #d1fae5; color: #065f46; }
     .status-差戻し { background: #fee2e2; color: #991b1b; }
     .status-取消 { background: #f1f5f9; color: #64748b; }
     .status-精算完了 { background: #ede9fe; color: #5b21b6; }
@@ -272,16 +281,62 @@
   }
 
   function itemCard(item) {
-    return '<div class="item-card" data-app="' + esc(item.appCode) + '" data-id="' + esc(item.requestId) + '">' +
-      itemCardInner(item) + '</div>';
+    var applicantLine = item.dataType === 'leave'
+      ? '<div style="font-size:11px;color:#475569;margin-bottom:4px">申請者: ' + esc(item.applicantName || item.applicantEmail) + '</div>'
+      : '';
+    return '<div class="item-card" data-app="' + esc(item.appCode) + '" data-id="' + esc(item.requestId) + '" data-type="' + esc(item.dataType || '') + '">' +
+      applicantLine + itemCardInner(item) + '</div>';
   }
 
   function bindItemCards(container, mode) {
     container.querySelectorAll('.item-card').forEach(function(c) {
       c.onclick = function() {
-        openDetail(c.getAttribute('data-app'), c.getAttribute('data-id'), mode);
+        var appCode = c.getAttribute('data-app');
+        var requestId = c.getAttribute('data-id');
+        if (c.getAttribute('data-type') === 'leave') {
+          openLeaveRequestApp_(findPortalListItem_(appCode, requestId) || { requestId: requestId });
+          return;
+        }
+        openDetail(appCode, requestId, mode);
       };
     });
+  }
+
+  function findPortalListItem_(appCode, requestId) {
+    var lists = [(appData && appData.myApplications) || [], (appData && appData.pendingApprovals) || []];
+    for (var i = 0; i < lists.length; i++) {
+      for (var j = 0; j < lists[i].length; j++) {
+        if (lists[i][j].appCode === appCode && String(lists[i][j].requestId) === String(requestId)) {
+          return lists[i][j];
+        }
+      }
+    }
+    return null;
+  }
+
+  function findLeaveWebAppUrl_() {
+    var launchers = (appData && appData.launchers) || [];
+    for (var i = 0; i < launchers.length; i++) {
+      if (launchers[i].dataType === 'leave' && launchers[i].webAppUrl) return launchers[i].webAppUrl;
+    }
+    return '';
+  }
+
+  function openLeaveRequestApp_(item) {
+    item = item || {};
+    var url = item.webAppUrl || findLeaveWebAppUrl_();
+    if (!url) {
+      toast('休暇届出申請のURLが未設定です。', true);
+      return;
+    }
+    if (item.requestId) {
+      url += (url.indexOf('?') === -1 ? '?' : '&') + 'leaveRequestId=' + encodeURIComponent(item.requestId);
+    }
+    try {
+      window.top.location.href = url;
+    } catch (e) {
+      window.location.href = url;
+    }
   }
 
   function renderMyList(items) {
@@ -307,15 +362,20 @@
   }
 
   function pendingCard(item) {
-    return '<div class="item-card" data-app="' + esc(item.appCode) + '" data-id="' + esc(item.requestId) + '">' +
+    return '<div class="item-card" data-app="' + esc(item.appCode) + '" data-id="' + esc(item.requestId) + '" data-type="' + esc(item.dataType || '') + '">' +
       '<div style="font-size:11px;color:#475569;margin-bottom:4px">申請者: ' + esc(item.applicantName || item.applicantEmail) + '</div>' +
       itemCardInner(item) + '</div>';
   }
 
   function itemCardInner(item) {
-    var tagClass = item.dataType === 'trip' ? 'app-tag-trip' : item.dataType === 'purchase' ? 'app-tag-purchase' : 'app-tag-claim';
-    var progress = item.totalSteps > 1 && item.status === '申請中'
-      ? ' / 承認' + item.currentStep + '/' + item.totalSteps : '';
+    var tagClass = item.dataType === 'trip' ? 'app-tag-trip'
+      : item.dataType === 'purchase' ? 'app-tag-purchase'
+      : item.dataType === 'leave' ? 'app-tag-leave'
+      : 'app-tag-claim';
+    var progress = item.dataType === 'leave' && item.totalSteps > 1
+      ? ' / ' + esc(item.currentStepName || '承認') + ' ' + item.currentStep + '/' + item.totalSteps
+      : (item.totalSteps > 1 && item.status === '申請中'
+        ? ' / 承認' + item.currentStep + '/' + item.totalSteps : '');
     var amountStr = item.amount ? ' / ' + Number(item.amount).toLocaleString() + '円' : '';
     var masterBadge = item.masterStatus === 'マスタ未登録あり'
       ? '<span class="extra-badge">マスタ未登録あり' + (item.unregisteredMasterCount ? ' ' + item.unregisteredMasterCount + '件' : '') + '</span>' : '';
@@ -327,9 +387,14 @@
     if (item.extraStatus && item.dataType === 'purchase') {
       extra = '<span class="extra-badge">' + esc(item.extraStatus) + '</span>';
     }
+    if (item.extraStatus && item.dataType === 'leave') {
+      extra = '<span class="extra-badge">' + esc(item.extraStatus) + '</span>';
+    }
     var period = item.dataType === 'purchase'
       ? '希望納期 ' + esc(item.tripStart || '-')
-      : esc(item.tripStart) + '〜' + esc(item.tripEnd);
+      : item.dataType === 'leave'
+        ? '取得日 ' + esc(item.tripStart || '-')
+        : esc(item.tripStart) + '〜' + esc(item.tripEnd);
     return '<div class="item-card-header">' +
       '<div><span class="app-tag ' + tagClass + '">' + esc(item.appName) + '</span>' +
       '<span class="item-title">' + esc(item.title || '（無題）') + '</span></div>' +
@@ -349,6 +414,11 @@
   }
 
   function openDetail(appCode, requestId, mode) {
+    var listed = findPortalListItem_(appCode, requestId);
+    if (listed && listed.dataType === 'leave') {
+      openLeaveRequestApp_(listed);
+      return;
+    }
     currentMode = mode;
     showLoading(true);
     google.script.run.withSuccessHandler(function(res) {

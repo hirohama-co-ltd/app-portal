@@ -40,6 +40,8 @@ var PURCHASE_MASTER_HEADERS = ['コード', '表示名', '別名', '有効'];
 var PURCHASE_UNREGISTERED_MASTER_SHEET = '未登録マスタ候補';
 var PURCHASE_UNREGISTERED_MASTER_HEADERS = ['候補ID', '種別', '入力名', '正式表示名', 'コード', '別名', '状態', '関連申請ID', '関連行No', '更新日時', '登録日時', '処理者Email'];
 
+var LEAVE_SHEET = '休暇・届出申請書';
+
 function openAppSpreadsheet_(app) {
   if (!app || !String(app.ssId || '').trim()) return null;
   try {
@@ -349,6 +351,64 @@ function mapHeaderColumns_(headers) {
 function portalCell_(data, colMap, header, fallback) {
   var idx = colMap && colMap.hasOwnProperty(header) ? colMap[header] : -1;
   return idx >= 0 ? data[idx] : fallback;
+}
+
+function mapLeaveRowFromPortal_(data, colMap) {
+  var status = String(portalCell_(data, colMap, '状態', '') || '').trim();
+  if (status === '申請済') status = '係長承認待ち';
+  return {
+    leaveRequestId: String(portalCell_(data, colMap, '休暇申請ID', data[0]) || '').trim(),
+    submittedAt: String(portalCell_(data, colMap, '申請日時', '') || '').trim(),
+    leaveType: String(portalCell_(data, colMap, '届出種類', '') || '').trim(),
+    applicationDate: normalizeDate(portalCell_(data, colMap, '申請日', '')),
+    department: String(portalCell_(data, colMap, '所属', '') || '').trim(),
+    employeeName: String(portalCell_(data, colMap, '氏名', '') || '').trim(),
+    applicantEmail: String(portalCell_(data, colMap, '申請者Email', '') || '').trim().toLowerCase(),
+    acquisitionDate: normalizeDate(portalCell_(data, colMap, '取得日', '')),
+    durationType: String(portalCell_(data, colMap, '取得日数', '') || '').trim(),
+    reason: String(portalCell_(data, colMap, '事由', '') || '').trim(),
+    status: status,
+    currentApproverEmail: String(portalCell_(data, colMap, '現在承認者Email', '') || '').trim().toLowerCase(),
+    currentStep: parseInt(portalCell_(data, colMap, '現在承認ステップ', 0), 10) || 0,
+    rejectReason: String(portalCell_(data, colMap, '差戻し理由', '') || '').trim(),
+    updatedAt: String(portalCell_(data, colMap, '更新日時', '') || '').trim(),
+    routeId: String(portalCell_(data, colMap, '経路ID', '') || '').trim(),
+    totalSteps: parseInt(portalCell_(data, colMap, '総ステップ数', 0), 10) || 0,
+    currentStepName: String(portalCell_(data, colMap, '現在ステップ名', '') || '').trim()
+  };
+}
+
+function readLeaveRowsFromApp_(app, filterFn) {
+  var appLabel = portalPerfAppLabel_(app);
+  var totalMark = portalPerfStart_('readLeaveRowsFromApp_' + appLabel);
+  var openMark = portalPerfStart_(appLabel + '.openById');
+  var ss = openAppSpreadsheet_(app);
+  portalPerfEnd_(openMark, ss ? 'ok' : 'failed');
+  if (!ss) {
+    portalPerfEnd_(totalMark, 'rows=0');
+    return [];
+  }
+  var sheet = ss.getSheetByName(LEAVE_SHEET);
+  if (!sheet || sheet.getLastRow() < 2) {
+    portalPerfEnd_(totalMark, 'rows=0 emptySheet');
+    return [];
+  }
+  var colCount = Math.max(sheet.getLastColumn(), 1);
+  var headerMark = portalPerfStart_(appLabel + '.readHeaders');
+  var colMap = mapHeaderColumns_(sheet.getRange(1, 1, 1, colCount).getValues()[0]);
+  portalPerfEnd_(headerMark);
+  var readMark = portalPerfStart_(appLabel + '.getValues');
+  var data = sheet.getRange(2, 1, sheet.getLastRow(), colCount).getValues();
+  portalPerfEnd_(readMark, 'sheetRows=' + data.length);
+  var rows = [];
+  for (var i = 0; i < data.length; i++) {
+    if (!data[i][0]) continue;
+    var row = mapLeaveRowFromPortal_(data[i], colMap);
+    if (!row.leaveRequestId) continue;
+    if (!filterFn || filterFn(row)) rows.push(row);
+  }
+  portalPerfEnd_(totalMark, 'rows=' + rows.length);
+  return rows;
 }
 
 function mapPurchaseRow_(data, colMap) {
